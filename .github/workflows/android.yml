@@ -1,0 +1,157 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish (e.g. v1.0.0). Leave empty to only build.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          gradle-version: '9.7.1'
+
+      - name: Make sure the Android SDK has our platform
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" > /dev/null 2>&1 || true
+          fi
+          echo "ANDROID_HOME=$SDK"
+
+      - name: Unit tests (M3U parser, URL tools, TS->HLS segmenter)
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Assemble debug + release APKs
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/iptv-player-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk out/iptv-player-release.apk
+          cd out && sha256sum *.apk | tee SHA256SUMS.txt && ls -la
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apks
+          path: out/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: debug-apk
+          path: out/iptv-player-debug.apk
+          if-no-files-found: error
+
+  e2e:
+    name: Emulator end-to-end (live streams)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: debug-apk
+          path: apk
+
+      - name: Run end-to-end suite on the emulator
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: bash .github/e2e.sh
+
+      - name: Emulator logcat
+        if: always()
+        run: adb logcat -d > logcat-full.txt 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-logs
+          path: |
+            logcat-full.txt
+            e2e-*.txt
+          if-no-files-found: ignore
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: apks
+          path: out
+
+      - name: Compute release tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag_name }}" ]; then
+            echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: IPTV Player ${{ steps.tag.outputs.tag }}
+          files: out/*
+          generate_release_notes: true
+          body: |
+            Android IPTV player: M3U playlist links and Xtream Codes (XC) accounts,
+            channel list with groups/search/favourites, Media3/ExoPlayer playback,
+            Chromecast support with a built-in HLS relay, and automatic background
+            playlist refresh.
+
+            **Install:** download `iptv-player-release.apk` and open it on your phone
+            (allow "install unknown apps" when prompted).
+
+            `iptv-player-debug.apk` is the same app with the CI end-to-end hooks enabled.
