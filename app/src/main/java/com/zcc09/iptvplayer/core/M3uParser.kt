@@ -21,15 +21,18 @@ object M3uParser {
         return out
     }
 
-    /** Index of the last comma that is not inside a quoted attribute value. */
-    private fun lastUnquotedComma(s: String): Int {
+    /**
+     * Index of the first comma that is not inside a quoted attribute value.
+     * That comma separates the attributes from the display name; display names
+     * themselves may contain commas, so the *last* comma would be wrong.
+     */
+    private fun firstUnquotedComma(s: String): Int {
         var inQuotes = false
-        var idx = -1
         for (i in s.indices) {
             val c = s[i]
-            if (c == '"') inQuotes = !inQuotes else if (c == ',' && !inQuotes) idx = i
+            if (c == '"') inQuotes = !inQuotes else if (c == ',' && !inQuotes) return i
         }
-        return idx
+        return -1
     }
 
     fun parse(text: String, playlistId: String): ParsedM3u {
@@ -59,7 +62,7 @@ object M3uParser {
 
                 line.startsWith("#EXTINF") -> {
                     val payload = line.substringAfter('#').substringAfter(':')
-                    val comma = lastUnquotedComma(payload)
+                    val comma = firstUnquotedComma(payload)
                     val attrPart = if (comma >= 0) payload.substring(0, comma) else payload
                     val namePart = if (comma >= 0) payload.substring(comma + 1) else ""
                     pendingAttrs = attrs(attrPart)

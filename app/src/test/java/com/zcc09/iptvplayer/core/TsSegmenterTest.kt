@@ -265,14 +265,70 @@ class TsSegmenterTest {
 
         val segments = segmenter.snapshot()
         val relayed = segments.sumOf { it.data.size }
-        // Segments that do not already start with a PAT get PAT+PMT repeated.
-        val injectedSegments = segments.count { !isPat(it.data, 0) }
-        val overhead = injectedSegments * 2 * 188
+        // Only the first segment comes straight out of the stream (it already
+        // starts with the PAT); every later one gets PAT+PMT repeated at its
+        // head, so the total is the fed bytes plus that overhead.
+        val overhead = (segments.size - 1) * 2 * 188
         assertTrue(
             "relayed=$relayed fed=$fed overhead=$overhead segments=${segments.size}",
             relayed == fed + overhead
         )
-        assertTrue("expected PSI to be repeated on most segments", injectedSegments >= 1)
+        assertTrue("expected several segments, got ${segments.size}", segments.size >= 3)
+        assertTrue("first segment must start with the PAT", isPat(segments.first().data, 0))
+        for (segment in segments.drop(1)) {
+            assertTrue(
+                "segment ${segment.seq} must carry the repeated PAT+PMT prefix",
+                isPat(segment.data, 0) && pidAt(segment.data, 188) == pmtPid
+            )
+        }
+    }
+
+    // ------------------------------------------------------------------ playlist
+
+    @Test
+    fun handlesMisalignedChunksWithoutLosingBytes() {
+        // The relay reads the upstream in arbitrary chunk sizes; a packet that
+        // straddles two reads must not cost any bytes.
+        val pmtPid = 0x1000
+        val videoPid = 0x0100
+        val pat = patPacket(pmtPid)
+        val pmt = pmtPacket(pmtPid, videoPid, 0x1B)
+        val keyAu = videoAu(videoPid, intArrayOf(9, 7, 8, 5))
+        val plainAu = videoAu(videoPid, intArrayOf(9, 1))
+
+        val stream = java.io.ByteArrayOutputStream()
+        stream.write(pat)
+        stream.write(pmt)
+        for (i in 0 until 300) {
+            val p = if (i % 25 == 0) keyAu else plainAu
+            stream.write(p)
+        }
+        val bytes = stream.toByteArray()
+
+        val aligned = TsSegmenter(initialTargetBytes = 188 * 60, minSegmentBytes = 188 * 30, maxSegments = 50)
+        aligned.feed(bytes, bytes.size)
+        aligned.finish()
+
+        val chunked = TsSegmenter(initialTargetBytes = 188 * 60, minSegmentBytes = 188 * 30, maxSegments = 50)
+        val odd = intArrayOf(137, 999, 4096, 71, 2000)
+        var off = 0
+        var i = 0
+        while (off < bytes.size) {
+            val n = minOf(odd[i % odd.size], bytes.size - off)
+            chunked.feed(bytes.copyOfRange(off, off + n), n)
+            off += n
+            i++
+        }
+        chunked.finish()
+
+        val a = aligned.snapshot().map { it.data.size }
+        val b = chunked.snapshot().map { it.data.size }
+        assertTrue("segment count differs: aligned=${a.size} chunked=${b.size}", a.size == b.size)
+        assertTrue("segment sizes differ:\n aligned=$a\n chunked=$b", a == b)
+        assertTrue(
+            "chunked fed != relayed+overhead: fed=${bytes.size}",
+            bytes.size == chunked.snapshot().sumOf { it.data.size } - (chunked.snapshot().size - 1) * 2 * 188
+        )
     }
 
     // ------------------------------------------------------------------ playlist

@@ -54,6 +54,8 @@ class TsSegmenter(
 
         private const val MIN_TARGET_BYTES = 400_000
         private const val MAX_TARGET_BYTES = 12_000_000
+        private const val BITRATE_SAMPLE_MS = 2_000L
+        private const val BITRATE_SAMPLE_BYTES = 512L * 1024
         private const val STREAM_TYPE_H264 = 0x1B
         private const val STREAM_TYPE_HEVC = 0x24
         private const val MODE_DECISION_BYTES = 4L * 1024 * 1024
@@ -73,11 +75,14 @@ class TsSegmenter(
     private val segments = ArrayDeque<Segment>()
     private val buf = ByteArrayOutputStream(4 * 1024 * 1024)
 
+    /** Assembly buffer for the packet currently being read. */
+    private val packet = ByteArray(TS_PACKET)
+    private var filled = 0
+
     private var nextSeq = 1L
     private var targetBytes = initialTargetBytes
-    private var totalBytes = 0L
-    private var lastFlushBytes = 0L
-    private var lastFlushAt = 0L
+    private var fedBytes = 0L
+    private var firstByteAt = 0L
     private var produced = 0
 
     // Programme specific information / codec tracking.
@@ -108,48 +113,56 @@ class TsSegmenter(
 
     fun feed(chunk: ByteArray, len: Int) {
         if (len <= 0) return
+        if (firstByteAt == 0L) firstByteAt = System.currentTimeMillis()
+        fedBytes += len
         var off = 0
         while (off < len) {
-            val remaining = len - off
-            if (remaining < TS_PACKET) {
-                buf.write(chunk, off, remaining)
-                break
-            }
-            if (chunk[off] != 0x47.toByte()) {
-                // Not packet aligned (rare) - resync on the next sync byte.
+            // The upstream is read in arbitrary chunk sizes, so packets are
+            // assembled here rather than assumed to be aligned to the chunk.
+            if (filled == 0 && chunk[off] != 0x47.toByte()) {
                 off++
                 continue
             }
-
-            val pid = pidOf(chunk, off)
-            val payloadStart = (chunk[off + 1].toInt() and 0x40) != 0
-            if (payloadStart) {
-                when {
-                    pid == 0 -> capturePat(chunk, off)
-                    pmtPid >= 0 && pid == pmtPid -> capturePmt(chunk, off)
-                }
+            val take = minOf(TS_PACKET - filled, len - off)
+            System.arraycopy(chunk, off, packet, filled, take)
+            filled += take
+            off += take
+            if (filled == TS_PACKET) {
+                consumePacket()
+                filled = 0
             }
-
-            val keyframe = videoPid >= 0 && pid == videoPid && payloadStart &&
-                accessUnitIsKeyframe(chunk, off)
-            val patBoundary = videoPid < 0 && pid == 0 && payloadStart
-
-            if (buf.size() >= targetBytes && (keyframe || patBoundary)) {
-                flush()
-            } else if (videoPid >= 0 && pid == videoPid && payloadStart &&
-                buf.size() >= targetBytes * 2
-            ) {
-                // Long GOP guard: never let a single segment grow unbounded.
-                flush()
-            }
-
-            if (buf.size() == 0 && pid == 0 && payloadStart) {
-                bufferStartsWithPat = true
-            }
-            buf.write(chunk, off, TS_PACKET)
-            off += TS_PACKET
-            if (videoPid < 0) analysedBytes += TS_PACKET
         }
+    }
+
+    /** Process one complete 188-byte packet: track PSI and cut on keyframes. */
+    private fun consumePacket() {
+        val pid = pidOf(packet, 0)
+        val payloadStart = (packet[1].toInt() and 0x40) != 0
+        if (payloadStart) {
+            when {
+                pid == 0 -> capturePat(packet, 0)
+                pmtPid >= 0 && pid == pmtPid -> capturePmt(packet, 0)
+            }
+        }
+
+        val keyframe = videoPid >= 0 && pid == videoPid && payloadStart &&
+            accessUnitIsKeyframe(packet, 0)
+        val patBoundary = videoPid < 0 && pid == 0 && payloadStart
+
+        if (buf.size() >= targetBytes && (keyframe || patBoundary)) {
+            flush()
+        } else if (videoPid >= 0 && pid == videoPid && payloadStart &&
+            buf.size() >= targetBytes * 2
+        ) {
+            // Long GOP guard: never let a single segment grow unbounded.
+            flush()
+        }
+
+        if (buf.size() == 0 && pid == 0 && payloadStart) {
+            bufferStartsWithPat = true
+        }
+        buf.write(packet, 0, TS_PACKET)
+        if (videoPid < 0) analysedBytes += TS_PACKET
     }
 
     /** Flush whatever is buffered (called when the upstream stream ends). */
@@ -301,7 +314,6 @@ class TsSegmenter(
         if (!force && size < minSegmentBytes) return
 
         val now = System.currentTimeMillis()
-        if (lastFlushAt == 0L) lastFlushAt = now
         var data = buf.toByteArray()
         buf.reset()
 
@@ -311,20 +323,23 @@ class TsSegmenter(
         bufferStartsWithPat = false
         if (prefix != null) data = prefix + data
 
-        val elapsed = (now - lastFlushAt).coerceAtLeast(1L)
-        val deltaBytes = totalBytes + size - lastFlushBytes
-        val bps = (deltaBytes * 8.0) / (elapsed / 1000.0)
-        totalBytes += size
-        lastFlushAt = now
-        lastFlushBytes = totalBytes
+        // Measure the stream bitrate as a cumulative average over the whole
+        // stream: a per-flush delta is meaningless for the first segment and
+        // would otherwise send the segment-size target to its maximum.
+        val elapsed = (now - firstByteAt).coerceAtLeast(1L)
+        val enoughSample = firstByteAt != 0L && elapsed >= BITRATE_SAMPLE_MS &&
+            fedBytes >= BITRATE_SAMPLE_BYTES
+        val streamBps = if (enoughSample) (fedBytes * 8.0) / (elapsed / 1000.0) else 0.0
 
-        val duration = if (bps > 50_000) {
-            (size * 8.0) / bps
+        if (streamBps > 100_000) {
+            targetBytes = (streamBps * targetSeconds / 8.0).toInt()
+                .coerceIn(MIN_TARGET_BYTES, MAX_TARGET_BYTES)
+        }
+
+        val duration = if (streamBps > 50_000) {
+            (size * 8.0) / streamBps
         } else {
             targetSeconds
-        }
-        if (bps > 100_000) {
-            targetBytes = (bps * targetSeconds / 8.0).toInt().coerceIn(MIN_TARGET_BYTES, MAX_TARGET_BYTES)
         }
 
         val segment = Segment(
