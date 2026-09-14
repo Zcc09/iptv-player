@@ -110,7 +110,10 @@ jobs:
 
       - name: Emulator logcat
         if: always()
-        run: adb logcat -d > logcat-full.txt 2>/dev/null || true
+        run: |
+          # adb logcat -d can block on a wedged emulator; never let it hold the job.
+          timeout 120 adb logcat -d > logcat-full.txt 2>/dev/null || true
+          ls -la logcat-full.txt 2>/dev/null || true
 
       - uses: actions/upload-artifact@v7
         if: always()
