@@ -38,7 +38,8 @@ So the app has three cast modes (Settings → Casting):
   panels whose `.mp4` output the TV can play).
 
 The relay is a tiny HTTP server on the phone (`http://<phone-ip>:<port>/live.m3u8`) that cuts the
-live MPEG-TS byte stream into ~3 s HLS segments at PAT boundaries — **no re-encoding**, so audio
+live MPEG-TS byte stream into ~3 s HLS segments **at H.264/HEVC keyframes** (and repeats PAT+PMT at
+the head of every segment, so each one is independently decodable) — **no re-encoding**, so audio
 and video stay in sync and CPU use is negligible. The TV pulls the playlist and segments from the
 phone, so the phone and the TV must be on the same Wi-Fi. The phone can go to sleep only if you
 leave the player screen; keeping the app open (or the screen on) keeps the relay fed.
@@ -59,7 +60,10 @@ gradle :app:assembleDebug        # or open the folder in Android Studio
 gradle :app:testDebugUnitTest    # M3U parser, URL tools, TS->HLS segmenter
 ```
 
-Toolchain: AGP 9.4.0, Gradle 9.7.1, Kotlin 2.4.20, compileSdk/targetSdk 36, minSdk 26.
+Toolchain: AGP 8.13.2, Gradle 8.14.5, Kotlin 2.4.20, compileSdk/targetSdk 36, minSdk 26.
+(AGP 9 has built-in Kotlin and rejects the `org.jetbrains.kotlin.android` plugin this project uses
+for the Compose and kotlinx-serialization compiler plugins; move to AGP 9's built-in Kotlin when
+you drop those, or set `android.builtInKotlin=false`.)
 Release signing comes from `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`
 env vars (see `.github/workflows/android.yml`); without them the release build falls back to the
 debug key so forks still build.

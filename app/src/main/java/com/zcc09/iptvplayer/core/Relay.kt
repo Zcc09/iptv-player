@@ -25,6 +25,21 @@ import kotlin.concurrent.withLock
  *
  * Pure Kotlin on purpose - covered by plain JVM unit tests.
  */
+/**
+ * Splits a continuous MPEG-TS byte stream into HLS segments.
+ *
+ * Segments are cut at **H.264/HEVC keyframe access units** (and the latest
+ * PAT+PMT is repeated at the start of every segment) so each segment is
+ * independently decodable - a naive byte/PAT-boundary split produces segments
+ * that start mid-GOP and players report "non-existing PPS 0 referenced".
+ *
+ * If no PMT/video PID can be found (unusual muxes), it falls back to cutting at
+ * PAT boundaries, which still yields a playable - if occasionally glitchy -
+ * stream. Nothing is re-encoded: the TS payload is relayed byte-for-byte, so
+ * audio/video stay in sync and CPU use is negligible.
+ *
+ * Pure Kotlin on purpose - covered by plain JVM unit tests.
+ */
 class TsSegmenter(
     private val targetSeconds: Double = 3.0,
     private val maxSegments: Int = 6,
@@ -35,9 +50,22 @@ class TsSegmenter(
 
     companion object {
         const val TS_PACKET = 188
-        const val TARGET_DURATION = 6
+        const val TARGET_DURATION = 8
+
         private const val MIN_TARGET_BYTES = 400_000
         private const val MAX_TARGET_BYTES = 12_000_000
+        private const val STREAM_TYPE_H264 = 0x1B
+        private const val STREAM_TYPE_HEVC = 0x24
+        private const val MODE_DECISION_BYTES = 4L * 1024 * 1024
+
+        // NAL unit types that mark a self-contained random access point.
+        private const val NAL_H264_IDR = 5
+        private const val NAL_H264_SPS = 7
+        private const val NAL_H264_SLICE = 1
+        private const val NAL_HEVC_VPS = 32
+        private const val NAL_HEVC_SPS = 33
+        private const val NAL_HEVC_IRAP_START = 16
+        private const val NAL_HEVC_IRAP_END = 23
     }
 
     private val lock = ReentrantLock()
@@ -52,7 +80,31 @@ class TsSegmenter(
     private var lastFlushAt = 0L
     private var produced = 0
 
+    // Programme specific information / codec tracking.
+    private var pmtPid = -1
+    private var videoPid = -1
+    private var videoCodec = 0
+    private var patPacket: ByteArray? = null
+    private var pmtPacket: ByteArray? = null
+    private var analysedBytes = 0L
+    private var bufferStartsWithPat = false
+
     val producedSegments: Int get() = lock.withLock { produced }
+
+    /** "keyframe" once the video stream was identified, "pat-fallback" otherwise. */
+    val modeName: String
+        get() = when {
+            videoPid >= 0 -> "keyframe"
+            analysedBytes >= MODE_DECISION_BYTES -> "pat-fallback"
+            else -> "detecting"
+        }
+
+    val codecName: String
+        get() = when (videoCodec) {
+            STREAM_TYPE_H264 -> "h264"
+            STREAM_TYPE_HEVC -> "hevc"
+            else -> "unknown"
+        }
 
     fun feed(chunk: ByteArray, len: Int) {
         if (len <= 0) return
@@ -64,15 +116,39 @@ class TsSegmenter(
                 break
             }
             if (chunk[off] != 0x47.toByte()) {
-                // Not packet aligned (shouldn't happen for TS) - resync.
+                // Not packet aligned (rare) - resync on the next sync byte.
                 off++
                 continue
             }
-            if (buf.size() >= targetBytes && isPat(chunk, off)) {
+
+            val pid = pidOf(chunk, off)
+            val payloadStart = (chunk[off + 1].toInt() and 0x40) != 0
+            if (payloadStart) {
+                when {
+                    pid == 0 -> capturePat(chunk, off)
+                    pmtPid >= 0 && pid == pmtPid -> capturePmt(chunk, off)
+                }
+            }
+
+            val keyframe = videoPid >= 0 && pid == videoPid && payloadStart &&
+                accessUnitIsKeyframe(chunk, off)
+            val patBoundary = videoPid < 0 && pid == 0 && payloadStart
+
+            if (buf.size() >= targetBytes && (keyframe || patBoundary)) {
                 flush()
+            } else if (videoPid >= 0 && pid == videoPid && payloadStart &&
+                buf.size() >= targetBytes * 2
+            ) {
+                // Long GOP guard: never let a single segment grow unbounded.
+                flush()
+            }
+
+            if (buf.size() == 0 && pid == 0 && payloadStart) {
+                bufferStartsWithPat = true
             }
             buf.write(chunk, off, TS_PACKET)
             off += TS_PACKET
+            if (videoPid < 0) analysedBytes += TS_PACKET
         }
     }
 
@@ -81,12 +157,143 @@ class TsSegmenter(
         if (buf.size() >= TS_PACKET) flush(force = true)
     }
 
-    private fun isPat(chunk: ByteArray, off: Int): Boolean {
-        if (off + 2 >= chunk.size) return false
-        val b1 = chunk[off + 1].toInt() and 0xFF
-        val b2 = chunk[off + 2].toInt() and 0xFF
-        return (b1 and 0x40) != 0 && (b1 and 0x1F) == 0 && b2 == 0
+    // ------------------------------------------------------------------ parsing
+
+    private fun pidOf(data: ByteArray, off: Int): Int =
+        ((data[off + 1].toInt() and 0x1F) shl 8) or (data[off + 2].toInt() and 0xFF)
+
+    /** Byte offset of the payload inside a TS packet (after any adaptation field). */
+    private fun payloadOffset(data: ByteArray, off: Int): Int {
+        return if ((data[off + 3].toInt() and 0x20) != 0) {
+            off + 5 + (data[off + 4].toInt() and 0xFF)
+        } else {
+            off + 4
+        }
     }
+
+    /** Offset of the section body (skipping the pointer_field), or -1. */
+    private fun sectionOffset(data: ByteArray, off: Int): Int {
+        val payload = payloadOffset(data, off)
+        if (payload + 1 >= off + TS_PACKET) return -1
+        val pointer = data[payload].toInt() and 0xFF
+        val section = payload + 1 + pointer
+        return if (section + 8 >= off + TS_PACKET) -1 else section
+    }
+
+    private fun capturePat(data: ByteArray, off: Int) {
+        val section = sectionOffset(data, off)
+        if (section < 0) return
+        if (data[section].toInt() and 0xFF != 0x00) return // table_id 0 = PAT
+        val sectionLength = ((data[section + 1].toInt() and 0x0F) shl 8) or
+            (data[section + 2].toInt() and 0xFF)
+        val end = minOf(section + 3 + sectionLength - 4, off + TS_PACKET)
+        var s = section + 8
+        while (s + 3 < end) {
+            val program = ((data[s].toInt() and 0xFF) shl 8) or (data[s + 1].toInt() and 0xFF)
+            val pid = ((data[s + 2].toInt() and 0x1F) shl 8) or (data[s + 3].toInt() and 0xFF)
+            if (program != 0) {
+                if (pid != pmtPid) {
+                    pmtPid = pid
+                    videoPid = -1
+                }
+                patPacket = data.copyOfRange(off, off + TS_PACKET)
+                return
+            }
+            s += 4
+        }
+    }
+
+    private fun capturePmt(data: ByteArray, off: Int) {
+        val section = sectionOffset(data, off)
+        if (section < 0) return
+        if (data[section].toInt() and 0xFF != 0x02) return // table_id 2 = PMT
+        val sectionLength = ((data[section + 1].toInt() and 0x0F) shl 8) or
+            (data[section + 2].toInt() and 0xFF)
+        var s = section + 12
+        val programInfoLength = ((data[section + 10].toInt() and 0x0F) shl 8) or
+            (data[section + 11].toInt() and 0xFF)
+        s += programInfoLength
+        val end = minOf(section + 3 + sectionLength - 4, off + TS_PACKET)
+        var h264Pid = -1
+        var otherPid = -1
+        var otherCodec = 0
+        while (s + 4 < end) {
+            val streamType = data[s].toInt() and 0xFF
+            val pid = ((data[s + 1].toInt() and 0x1F) shl 8) or (data[s + 2].toInt() and 0xFF)
+            val esInfoLength = ((data[s + 3].toInt() and 0x0F) shl 8) or (data[s + 4].toInt() and 0xFF)
+            if (streamType == STREAM_TYPE_H264) {
+                h264Pid = pid
+            } else if (otherPid < 0 && streamType == STREAM_TYPE_HEVC) {
+                otherPid = pid
+                otherCodec = streamType
+            }
+            s += 5 + esInfoLength
+        }
+        pmtPacket = data.copyOfRange(off, off + TS_PACKET)
+        when {
+            h264Pid >= 0 -> {
+                videoPid = h264Pid
+                videoCodec = STREAM_TYPE_H264
+            }
+
+            otherPid >= 0 -> {
+                videoPid = otherPid
+                videoCodec = otherCodec
+            }
+        }
+    }
+
+    /**
+     * True when this packet starts an access unit that carries SPS/IDR (H.264)
+     * or VPS/SPS/IRAP (HEVC), i.e. a point where a player can start decoding.
+     */
+    private fun accessUnitIsKeyframe(data: ByteArray, off: Int): Boolean {
+        val payload = payloadOffset(data, off)
+        val packetEnd = off + TS_PACKET
+        if (payload + 9 >= packetEnd) return false
+        if (data[payload] != 0.toByte() ||
+            data[payload + 1] != 0.toByte() ||
+            data[payload + 2] != 1.toByte()
+        ) {
+            return false
+        }
+        // PES header: startcode(3) stream_id(1) length(2) flags(2) header_data_length(1)
+        var s = payload + 9 + (data[payload + 8].toInt() and 0xFF)
+        var scanned = 0
+        while (s + 3 < packetEnd && scanned < 24) {
+            if (data[s] == 0.toByte() && data[s + 1] == 0.toByte() && data[s + 2] == 1.toByte()) {
+                if (videoCodec == STREAM_TYPE_HEVC) {
+                    // HEVC NAL header: forbidden(1) type(6) layer_id(6) tid+1(3)
+                    val type = (data[s + 3].toInt() and 0x7E) shr 1
+                    if (type in NAL_HEVC_IRAP_START..NAL_HEVC_IRAP_END) return true
+                    if (type == NAL_HEVC_VPS || type == NAL_HEVC_SPS) return true
+                    if (type <= 15) return false // VCL slice, not a random access point
+                } else {
+                    val type = data[s + 3].toInt() and 0x1F
+                    if (type == NAL_H264_IDR || type == NAL_H264_SPS) return true
+                    if (type == NAL_H264_SLICE) return false
+                }
+                scanned++
+                s += 4
+            } else {
+                s++
+            }
+        }
+        return false
+    }
+
+    /** Latest PAT+PMT, repeated at the head of every keyframe-cut segment. */
+    private fun psiPrefix(): ByteArray? {
+        if (videoPid < 0) return null
+        val pat = patPacket ?: return null
+        val pmt = pmtPacket ?: return null
+        val out = ByteArray(2 * TS_PACKET)
+        System.arraycopy(pat, 0, out, 0, TS_PACKET)
+        System.arraycopy(pmt, 0, out, TS_PACKET, TS_PACKET)
+        return out
+    }
+
+    // ------------------------------------------------------------------ segments
 
     private fun flush(force: Boolean = false) {
         val size = buf.size()
@@ -95,18 +302,24 @@ class TsSegmenter(
 
         val now = System.currentTimeMillis()
         if (lastFlushAt == 0L) lastFlushAt = now
-        val data = buf.toByteArray()
+        var data = buf.toByteArray()
         buf.reset()
 
+        // Repeat the programme tables at the head of the segment, unless the
+        // segment already begins with a PAT (then the PMT follows right after).
+        val prefix = if (bufferStartsWithPat) null else psiPrefix()
+        bufferStartsWithPat = false
+        if (prefix != null) data = prefix + data
+
         val elapsed = (now - lastFlushAt).coerceAtLeast(1L)
-        val deltaBytes = totalBytes + data.size - lastFlushBytes
+        val deltaBytes = totalBytes + size - lastFlushBytes
         val bps = (deltaBytes * 8.0) / (elapsed / 1000.0)
-        totalBytes += data.size
+        totalBytes += size
         lastFlushAt = now
         lastFlushBytes = totalBytes
 
         val duration = if (bps > 50_000) {
-            (data.size * 8.0) / bps
+            (size * 8.0) / bps
         } else {
             targetSeconds
         }
@@ -251,6 +464,8 @@ class HlsRelay {
         append(",\"bytesIn\":").append(bytesIn)
         append(",\"clients\":").append(clientsServed)
         append(",\"segments\":").append(segmenter?.producedSegments ?: 0)
+        append(",\"mode\":\"").append(segmenter?.modeName ?: "none").append('"')
+        append(",\"codec\":\"").append(segmenter?.codecName ?: "-").append('"')
         append(",\"upstreamCode\":").append(upstreamCode)
         append(",\"error\":").append("\"").append((lastError ?: "").replace('"', '\'')).append("\"}")
     }
@@ -273,6 +488,7 @@ class HlsRelay {
                 upstreamCode = conn.responseCode
                 attempt = 0
                 Logx.i("RELAY_UPSTREAM_CONNECTED code=$upstreamCode url=$upstreamUrl")
+                var lastMode = ""
                 while (running) {
                     val n = try {
                         input.read(buffer)
@@ -284,6 +500,10 @@ class HlsRelay {
                     if (n > 0) {
                         bytesIn += n
                         seg.feed(buffer, n)
+                        if (seg.modeName != lastMode) {
+                            lastMode = seg.modeName
+                            Logx.i("RELAY_MODE ${seg.modeName} codec=${seg.codecName}")
+                        }
                     }
                 }
                 runCatching { input.close() }
