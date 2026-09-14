@@ -5,12 +5,15 @@
 #  2. load the M3U playlist link and the Xtream account (live server, real channels)
 #  3. refresh all playlists (the auto-refresh code path)
 #  4. render the playlist screen and assert the downloaded data shows up in the UI
-#  5. play a real 4K MPEG-TS channel
+#  5. play a real MPEG-TS channel
 #  6. play a low-bitrate HLS stream and wait for a decoded, rendered frame
 #  7. start the HLS relay and validate its playlist + segments (on device AND from the host)
 #  8. play the relay's own HLS output back through the player
 #  9. exercise the Chromecast code path
 # 10. fail on any crash
+#
+# Every adb/network call is wrapped in `timeout` so a wedged device produces a
+# clear failure instead of a 6-hour job.
 
 set -uo pipefail
 
@@ -19,13 +22,17 @@ ACT="$PKG/.MainActivity"
 APK=apk/iptv-player-debug.apk
 FAILURES=0
 LOG=""
+ADB_TIMEOUT=90
 
 pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAILURES=$((FAILURES + 1)); }
-step() { echo; echo "=== $1"; }
+step() { echo; echo "=== [$(date -u +%H:%M:%S)] $1"; }
+
+adb_t() { timeout "$ADB_TIMEOUT" adb "$@"; }
 
 refresh_log() {
-  LOG=$(adb logcat -d -v time IPTV_E2E:V '*:S' 2>/dev/null | sed 's/.*IPTV_E2E *: *//')
+  LOG=$(timeout "$ADB_TIMEOUT" adb logcat -d -v time IPTV_E2E:V '*:S' 2>/dev/null \
+    | sed 's/.*IPTV_E2E *: *//' || true)
 }
 
 show_log() {
@@ -33,24 +40,32 @@ show_log() {
 }
 
 assert_log() { # pattern, description
-  if echo "$LOG" | grep -qE "$1"; then pass "$2"; else fail "$2 (no log line matching /$1/)"; show_log "$1" || true; fi
+  if echo "$LOG" | grep -qE "$1"; then pass "$2"; else fail "$2 (no log line matching /$1/)"; fi
 }
 
 run_action() { # action, seconds to wait
-  adb logcat -c > /dev/null 2>&1 || true
-  adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
-  adb shell am start -W -n "$ACT" -e e2e "$1" > /dev/null 2>&1 || true
+  timeout 30 adb logcat -c > /dev/null 2>&1 || echo "     (logcat -c failed)"
+  timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
+  timeout 90 adb shell am start -W -n "$ACT" -e e2e "$1" > /dev/null 2>&1 \
+    || echo "     (am start returned non-zero for '$1')"
   sleep "$2"
   refresh_log
 }
 
 step "Install debug APK"
-adb install -r "$APK" || { echo "install failed"; exit 1; }
-adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1 || true
-adb shell wm dismiss-keyguard > /dev/null 2>&1 || true
-adb shell input keyevent KEYCODE_WAKEUP > /dev/null 2>&1 || true
-adb shell settings put system screen_off_timeout 1800000 > /dev/null 2>&1 || true
-pass "installed $APK"
+INSTALLED=0
+for attempt in 1 2; do
+  if timeout 300 adb install -r "$APK" > /dev/null 2>&1; then INSTALLED=1; break; fi
+  echo "     install attempt $attempt failed, retrying"
+  sleep 5
+done
+if [ "$INSTALLED" -eq 1 ]; then pass "installed $APK"; else fail "could not install $APK"; fi
+timeout 60 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1 || true
+timeout 60 adb shell wm dismiss-keyguard > /dev/null 2>&1 || true
+timeout 60 adb shell input keyevent KEYCODE_WAKEUP > /dev/null 2>&1 || true
+timeout 60 adb shell settings put system screen_off_timeout 1800000 > /dev/null 2>&1 || true
+timeout 60 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || echo "     (first launch timed out)"
+sleep 5
 
 step "Load playlists from the live server (M3U link + Xtream account)"
 run_action seed 70
@@ -80,20 +95,24 @@ assert_log "E2E_CHANNEL" "channel entries logged"
 show_log "E2E_PLAYLIST|E2E_CHANNEL"
 
 step "Playlist screen renders the downloaded data"
-adb shell uiautomator dump /sdcard/ui-home.xml > /dev/null 2>&1 || true
-UI=$(adb shell cat /sdcard/ui-home.xml 2>/dev/null || echo "")
-if echo "$UI" | grep -q "CI M3U playlist"; then
-  pass "playlist visible in the UI"
+timeout 90 adb shell uiautomator dump /sdcard/ui-home.xml > /dev/null 2>&1 || echo "     (uiautomator dump failed)"
+UI=$(timeout 60 adb shell cat /sdcard/ui-home.xml 2>/dev/null || echo "")
+if [ -z "$UI" ]; then
+  fail "could not read the UI hierarchy"
 else
-  fail "playlist not found in the UI hierarchy"
-fi
-if echo "$UI" | grep -qiE "channels"; then
-  pass "channel count shown in the UI"
-else
-  fail "channel count missing from the UI"
+  if echo "$UI" | grep -q "CI M3U playlist"; then
+    pass "playlist visible in the UI"
+  else
+    fail "playlist not found in the UI hierarchy"
+  fi
+  if echo "$UI" | grep -qiE "channels"; then
+    pass "channel count shown in the UI"
+  else
+    fail "channel count missing from the UI"
+  fi
 fi
 
-step "Play a real 4K MPEG-TS channel"
+step "Play a real MPEG-TS channel"
 run_action playfirst 45
 assert_log "PLAYBACK_OPENING url=" "player opened the stream url"
 if echo "$LOG" | grep -qE "PLAYBACK_BUFFERING|PLAYBACK_READY|PLAYBACK_VIDEO_SIZE|PLAYBACK_FIRST_FRAME"; then
@@ -103,13 +122,13 @@ else
 fi
 show_log "PLAYBACK_"
 if echo "$LOG" | grep -q "PLAYBACK_ERROR"; then
-  echo "     ! player reported an error (expected on an emulator for 4K hardware codecs):"
+  echo "     ! player reported an error (expected on an emulator for high-bitrate codecs):"
   show_log "PLAYBACK_ERROR"
 fi
 
 step "Player screen shows the channel and the Cast control"
-adb shell uiautomator dump /sdcard/ui-player.xml > /dev/null 2>&1 || true
-PUI=$(adb shell cat /sdcard/ui-player.xml 2>/dev/null || echo "")
+timeout 90 adb shell uiautomator dump /sdcard/ui-player.xml > /dev/null 2>&1 || echo "     (uiautomator dump failed)"
+PUI=$(timeout 60 adb shell cat /sdcard/ui-player.xml 2>/dev/null || echo "")
 if echo "$PUI" | grep -qE "AR: |CI "; then
   pass "player overlay shows the channel name"
 else
@@ -136,7 +155,7 @@ show_log "RELAY|E2E_RELAY"
 step "Relay output verified independently from the host"
 PORT=$(echo "$LOG" | grep -oE "RELAY_URL http://[0-9.]+:[0-9]+" | grep -oE "[0-9]+$" | head -1)
 if [ -n "${PORT:-}" ]; then
-  adb forward tcp:18080 "tcp:$PORT" > /dev/null 2>&1 || true
+  timeout 30 adb forward tcp:18080 "tcp:$PORT" > /dev/null 2>&1 || true
   curl -sS -m 30 "http://127.0.0.1:18080/live.m3u8" -o e2e-relay.m3u8 || true
   if grep -q "#EXTM3U" e2e-relay.m3u8 2>/dev/null; then
     pass "host fetched the relay playlist (port $PORT)"
@@ -181,14 +200,14 @@ assert_log "CAST_(AVAILABLE|INIT_OK|INIT_FAILED)" "cast subsystem initialised or
 show_log "CAST_"
 
 step "Crash check"
-CRASHES=$(adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
+CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
 if [ "${CRASHES:-0}" -eq 0 ]; then
   pass "no fatal exceptions in logcat"
 else
   fail "$CRASHES fatal exception(s) in logcat"
-  adb logcat -d | grep -A 25 "FATAL EXCEPTION" | head -80
+  timeout 120 adb logcat -d | grep -A 25 "FATAL EXCEPTION" | head -80 || true
 fi
-ANRS=$(adb logcat -d 2>/dev/null | grep -c "ANR in $PKG" || true)
+ANRS=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "ANR in $PKG" || true)
 if [ "${ANRS:-0}" -eq 0 ]; then pass "no ANRs"; else fail "$ANRS ANR(s)"; fi
 
 echo
