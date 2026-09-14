@@ -54,8 +54,9 @@ class TsSegmenter(
 
         private const val MIN_TARGET_BYTES = 400_000
         private const val MAX_TARGET_BYTES = 12_000_000
-        private const val BITRATE_SAMPLE_MS = 2_000L
-        private const val BITRATE_SAMPLE_BYTES = 512L * 1024
+        private const val RATE_WINDOW_MS = 8_000L
+        private const val RATE_MIN_SAMPLE_MS = 3_000L
+        private const val RATE_MIN_SAMPLE_BYTES = 512L * 1024
         private const val STREAM_TYPE_H264 = 0x1B
         private const val STREAM_TYPE_HEVC = 0x24
         private const val MODE_DECISION_BYTES = 4L * 1024 * 1024
@@ -82,8 +83,10 @@ class TsSegmenter(
     private var nextSeq = 1L
     private var targetBytes = initialTargetBytes
     private var fedBytes = 0L
-    private var firstByteAt = 0L
     private var produced = 0
+
+    /** [timestamp, cumulative bytes] samples for the sliding-window bitrate. */
+    private val rateSamples = ArrayDeque<LongArray>()
 
     // Programme specific information / codec tracking.
     private var pmtPid = -1
@@ -113,7 +116,6 @@ class TsSegmenter(
 
     fun feed(chunk: ByteArray, len: Int) {
         if (len <= 0) return
-        if (firstByteAt == 0L) firstByteAt = System.currentTimeMillis()
         fedBytes += len
         var off = 0
         while (off < len) {
@@ -323,13 +325,19 @@ class TsSegmenter(
         bufferStartsWithPat = false
         if (prefix != null) data = prefix + data
 
-        // Measure the stream bitrate as a cumulative average over the whole
-        // stream: a per-flush delta is meaningless for the first segment and
-        // would otherwise send the segment-size target to its maximum.
-        val elapsed = (now - firstByteAt).coerceAtLeast(1L)
-        val enoughSample = firstByteAt != 0L && elapsed >= BITRATE_SAMPLE_MS &&
-            fedBytes >= BITRATE_SAMPLE_BYTES
-        val streamBps = if (enoughSample) (fedBytes * 8.0) / (elapsed / 1000.0) else 0.0
+        // Measure the bitrate over a sliding window of recent flushes. A
+        // cumulative average (or a per-flush delta) is skewed by the initial
+        // burst every IPTV proxy sends, which would inflate the segment-size
+        // target and produce 15s+ segments.
+        rateSamples.addLast(longArrayOf(now, fedBytes))
+        while (rateSamples.size > 2 && now - rateSamples.first()[0] > RATE_WINDOW_MS) {
+            rateSamples.removeFirst()
+        }
+        val oldest = rateSamples.first()
+        val spanMs = now - oldest[0]
+        val windowBytes = fedBytes - oldest[1]
+        val enoughSample = spanMs >= RATE_MIN_SAMPLE_MS && windowBytes >= RATE_MIN_SAMPLE_BYTES
+        val streamBps = if (enoughSample) (windowBytes * 8.0) / (spanMs / 1000.0) else 0.0
 
         if (streamBps > 100_000) {
             targetBytes = (streamBps * targetSeconds / 8.0).toInt()
