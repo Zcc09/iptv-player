@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer.cast
 import android.content.Context
 import android.net.Uri
 import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.mediarouter.media.MediaRouter
@@ -56,7 +57,7 @@ object CastCtl {
             val ctx = CastContext.getSharedInstance(context.applicationContext)
             castContext = ctx
             val player = CastPlayer.Builder(context.applicationContext).build()
-            player.setSessionAvailabilityListener(object : CastPlayer.SessionAvailabilityListener {
+            player.setSessionAvailabilityListener(object : SessionAvailabilityListener {
                 override fun onCastSessionAvailable() {
                     _casting.value = true
                     Logx.i("CAST_SESSION_AVAILABLE")
@@ -88,6 +89,11 @@ object CastCtl {
             val appCtx = context.applicationContext
             val r = MediaRouter.getInstance(appCtx)
             router = r
+            val selector = cc.mergedSelector
+            if (selector == null) {
+                Logx.w("CAST_DISCOVERY_SKIPPED (no cast app selector available)")
+                return
+            }
             if (callback == null) {
                 callback = object : MediaRouter.Callback() {
                     override fun onRouteAdded(router: MediaRouter, route: MediaRouter.RouteInfo) {
@@ -104,7 +110,7 @@ object CastCtl {
                 }
             }
             callback?.let {
-                r.addCallback(cc.mergedSelector, it, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
+                r.addCallback(selector, it, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
             }
             scanning = true
             refreshRoutes()
@@ -123,14 +129,14 @@ object CastCtl {
 
     private fun refreshRoutes() {
         val r = router ?: return
-        val cc = castContext ?: return
+        val selector = castContext?.mergedSelector ?: return
         val out = ArrayList<RouteItem>()
         try {
             val default = r.defaultRoute
             for (route in r.routes) {
                 if (route === default) continue
                 if (!route.isEnabled) continue
-                if (!route.matchesSelector(cc.mergedSelector)) continue
+                if (!route.matchesSelector(selector)) continue
                 out.add(
                     RouteItem(
                         id = route.id ?: route.name.toString(),
