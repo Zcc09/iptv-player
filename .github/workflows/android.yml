@@ -33,16 +33,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6.3.0
         with:
-          gradle-version: '8.14.5'
+          gradle-version: '9.7.1'
 
       - name: Make sure the Android SDK has our platform
         run: |
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           if [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
             yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37" > /dev/null 2>&1 || true
             "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" > /dev/null 2>&1 || true
           fi
           echo "ANDROID_HOME=$SDK"
+          ls "$SDK/platforms" 2>/dev/null || true
 
       - name: Unit tests (M3U parser, URL tools, TS->HLS segmenter)
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace

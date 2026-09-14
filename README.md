@@ -60,10 +60,10 @@ gradle :app:assembleDebug        # or open the folder in Android Studio
 gradle :app:testDebugUnitTest    # M3U parser, URL tools, TS->HLS segmenter
 ```
 
-Toolchain: AGP 8.13.2, Gradle 8.14.5, Kotlin 2.4.20, compileSdk/targetSdk 36, minSdk 26.
-(AGP 9 has built-in Kotlin and rejects the `org.jetbrains.kotlin.android` plugin this project uses
-for the Compose and kotlinx-serialization compiler plugins; move to AGP 9's built-in Kotlin when
-you drop those, or set `android.builtInKotlin=false`.)
+Toolchain: AGP 9.4.0 (built-in Kotlin), Gradle 9.7.1, Kotlin compiler plugins 2.4.20,
+compileSdk 37, targetSdk 36, minSdk 26. Compose 1.12 (BOM 2026.09.00) requires compileSdk 37 and
+AGP 9.1+, and AGP 9 rejects the `org.jetbrains.kotlin.android` plugin (Kotlin compilation is
+built in) while still accepting the Compose and kotlinx-serialization compiler plugins.
 Release signing comes from `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`
 env vars (see `.github/workflows/android.yml`); without them the release build falls back to the
 debug key so forks still build.
