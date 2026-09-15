@@ -223,7 +223,7 @@ else
 fi
 show_log "E2E_UPDATE_CHECK"
 run_action updatedownload 240
-if echo "$LOG" | grep -qE "E2E_UPDATE_DOWNLOADED bytes=[1-9][0-9]*"; then
+if echo "$LOG" | grep -qE "E2E_UPDATE_DOWNLOADED .*bytes=[1-9][0-9]*"; then
   pass "updater downloaded a full APK from GitHub"
 elif echo "$LOG" | grep -q "E2E_UPDATE_DOWNLOAD_NO_UPDATE"; then
   pass "updater reported no newer release (expected when CI tag == app version)"
