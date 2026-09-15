@@ -35,6 +35,7 @@ import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.TvDetector
 import com.zcc09.iptvplayer.core.Updater
 import com.zcc09.iptvplayer.core.UpdateState
+import com.zcc09.iptvplayer.core.VersionTools
 import kotlinx.coroutines.delay
 
 @Composable
@@ -108,9 +109,8 @@ private fun UpdateDialog() {
                         )
                         if (state.info.apkSize > 0) {
                             Spacer(Modifier.height(4.dp))
-                            val mb = state.info.apkSize / (1024f * 1024f)
                             Text(
-                                text = "Size: ${"%.1f".format(mb)} MB",
+                                text = "Size: ${VersionTools.formatBytes(state.info.apkSize)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -174,10 +174,13 @@ private fun UpdateDialog() {
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         }
                         Spacer(Modifier.height(10.dp))
-                        val downMb = state.downloadedBytes / (1024f * 1024f)
-                        val totalMb = state.totalBytes / (1024f * 1024f)
                         Text(
-                            text = if (state.totalBytes > 0) "${"%.1f".format(downMb)} MB / ${"%.1f".format(totalMb)} MB" else "${"%.1f".format(downMb)} MB downloaded",
+                            text = if (state.totalBytes > 0) {
+                                "${VersionTools.formatBytes(state.downloadedBytes)} / " +
+                                    VersionTools.formatBytes(state.totalBytes)
+                            } else {
+                                "${VersionTools.formatBytes(state.downloadedBytes)} downloaded"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
