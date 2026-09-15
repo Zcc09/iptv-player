@@ -52,6 +52,31 @@ run_action() { # action, seconds to wait
   refresh_log
 }
 
+# Screenshots for the store listing (Play wants 2-8 phone shots, >=320px).
+# Written to ./screenshots and uploaded as a CI artifact.
+shot() { # <name>
+  local out="screenshots/$1.png"
+  mkdir -p screenshots
+  if timeout 60 adb exec-out screencap -p > "$out" 2>/dev/null && [ -s "$out" ]; then
+    echo "  📸 $out ($(wc -c < "$out") bytes)"
+  else
+    echo "  ⚠️  screenshot $1 failed"
+    rm -f "$out"
+  fi
+}
+
+landscape() { # lock the emulator to landscape so the TV layout can be captured
+  timeout 60 adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1 || true
+  timeout 60 adb shell settings put system user_rotation 1 > /dev/null 2>&1 || true
+  sleep 6
+}
+
+portrait() {
+  timeout 60 adb shell settings put system user_rotation 0 > /dev/null 2>&1 || true
+  timeout 60 adb shell settings put system accelerometer_rotation 1 > /dev/null 2>&1 || true
+  sleep 4
+}
+
 step "Install debug APK"
 INSTALLED=0
 for attempt in 1 2; do
@@ -112,6 +137,8 @@ else
   fi
 fi
 
+shot 1-playlists
+
 step "Play a real MPEG-TS channel"
 run_action playfirst 45
 assert_log "PLAYBACK_OPENING url=" "player opened the stream url"
@@ -139,6 +166,7 @@ step "Play a low-bitrate HLS stream and wait for a rendered frame"
 run_action playtest 40
 assert_log "PLAYBACK_FIRST_FRAME" "a frame was decoded and rendered on screen"
 if echo "$LOG" | grep -q "PLAYBACK_VIDEO_SIZE"; then pass "video size reported by the decoder"; fi
+shot 2-live-player
 
 step "HLS relay: start it for a live TS channel and validate the output"
 run_action relay 60
@@ -206,6 +234,11 @@ show_log "E2E_TV_"
 run_action tvmode 8
 assert_log "E2E_TV_MODE active=TV" "Android TV interface mode can be activated explicitly"
 show_log "E2E_TV_"
+# The ten-foot layout is a widescreen one: capture it locked to landscape.
+landscape
+run_action tvmode 10
+shot 3-tv-home
+portrait
 
 step "Navigation hints toggle"
 run_action navhints 8

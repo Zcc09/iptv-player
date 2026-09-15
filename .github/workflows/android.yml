@@ -135,6 +135,13 @@ jobs:
             e2e-*.txt
           if-no-files-found: ignore
 
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/*.png
+          if-no-files-found: ignore
+
   release:
     name: Publish release
     needs: build
