@@ -8,7 +8,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- NOTE: REQUEST_INSTALL_PACKAGES is declared only by the `github` flavor
+         (src/github/AndroidManifest.xml). Google Play restricts that permission
+         and forbids apps from installing their own updates, so the `play`
+         flavor must not declare it. -->
 
     <uses-feature
         android:name="android.software.leanback"
@@ -17,21 +20,13 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <!-- Android 11+ package visibility: without this the updater cannot see the
-         system package installer when it resolves the install intent. -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="application/vnd.android.package-archive" />
-        </intent>
-    </queries>
-
     <application
         android:name=".App"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
         android:hardwareAccelerated="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"

@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer.core
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.zcc09.iptvplayer.BuildConfig
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -75,6 +76,14 @@ object Updater {
         currentVersion: String,
         isManual: Boolean = false
     ): UpdateInfo? = withContext(Dispatchers.IO) {
+        // The Play build must not self-update: Google Play forbids it and owns
+        // updates for that flavor (see PlayUpdate). Only the sideloaded github
+        // build does the GitHub release check + APK install.
+        if (!BuildConfig.SELF_UPDATE) {
+            Logx.i("GitHub updater skipped: this flavor updates through Google Play")
+            return@withContext null
+        }
+
         val now = System.currentTimeMillis()
         if (!isManual && now - lastCheckedMs < 10 * 60 * 1000) {
             return@withContext null
@@ -142,7 +151,7 @@ object Updater {
                 Logx.i("App is up to date: $currentVersion (latest on GitHub: $tagName)")
                 _state.value = UpdateState.Idle
                 if (isManual) {
-                    Repo.postStatus("IPTV Player is up to date ($currentVersion)")
+                    Repo.postStatus("Internet TV Player is up to date ($currentVersion)")
                 }
                 return@withContext null
             }
@@ -269,7 +278,7 @@ object Updater {
             // exists. A genuinely unresolvable intent is caught below.
             context.startActivity(intent)
             Logx.i("UPDATE_INSTALL_LAUNCHED uri=$uri")
-            Repo.postStatus("Opening the installer to update IPTV Player")
+            Repo.postStatus("Opening the installer to update Internet TV Player")
         } catch (t: Throwable) {
             Logx.e("Failed to start installer intent", t)
             Repo.postStatus("Could not open installer: ${t.message}")

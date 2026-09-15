@@ -61,7 +61,7 @@ fun PlaylistsScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("IPTV Player") },
+                title = { Text("Internet TV Player") },
                 actions = {
                     TextButton(onClick = {
                         Repo.setUiMode(AppUiMode.TV)

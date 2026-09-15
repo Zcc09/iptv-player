@@ -35,11 +35,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.BuildConfig
 import com.zcc09.iptvplayer.core.AppUiMode
 import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Net
+import com.zcc09.iptvplayer.core.PlayUpdate
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.Updater
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen() {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val castMode by Repo.castMode.collectAsState()
     val uiMode by Repo.uiMode.collectAsState()
     val showNavHints by Repo.showNavHints.collectAsState()
@@ -245,17 +248,29 @@ fun SettingsScreen() {
             Text("Updates", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Current version: v${BuildConfig.VERSION_NAME}\n" +
-                    "IPTV Player checks GitHub releases for updates. When a new version is released, " +
-                    "it can be downloaded and installed directly from the app.",
+                text = if (BuildConfig.SELF_UPDATE) {
+                    "Current version: v${BuildConfig.VERSION_NAME}\n" +
+                        "This build updates itself from GitHub Releases: when a new version is " +
+                        "published it is downloaded and installed straight from the app."
+                } else {
+                    "Current version: v${BuildConfig.VERSION_NAME}\n" +
+                        "This build is updated by Google Play. Use the button below to ask Play " +
+                        "for a new version — it downloads in the background and the app restarts " +
+                        "when it is ready."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Button(onClick = {
-                scope.launch {
-                    Repo.postStatus("Checking GitHub for updates…")
-                    Updater.checkForUpdate(BuildConfig.VERSION_NAME, isManual = true)
+                if (BuildConfig.SELF_UPDATE) {
+                    scope.launch {
+                        Repo.postStatus("Checking GitHub for updates…")
+                        Updater.checkForUpdate(BuildConfig.VERSION_NAME, isManual = true)
+                    }
+                } else {
+                    Repo.postStatus("Checking Google Play for updates…")
+                    PlayUpdate.checkAndPrompt(context) { Repo.postStatus(it) }
                 }
             }) {
                 Text("Check for updates now")
@@ -268,7 +283,7 @@ fun SettingsScreen() {
             Text("About", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "IPTV Player ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})\n" +
+                "Internet TV Player ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})\n" +
                     "M3U playlists and Xtream Codes accounts, Media3/ExoPlayer playback, " +
                     "Chromecast support, background auto-refresh.",
                 style = MaterialTheme.typography.bodySmall,

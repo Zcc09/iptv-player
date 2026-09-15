@@ -884,7 +884,7 @@ private fun TvEmptyPlaylistsView(
             Text(text = "📺", fontSize = 56.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Welcome to IPTV Player — TV Edition",
+                text = "Welcome to Internet TV Player — TV Edition",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White

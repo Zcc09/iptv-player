@@ -1,16 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android TV banner (320x180). Same two-panel motif and accent pair as the
+  launcher icon, so the TV row and the phone home screen match. Vector
+  drawables cannot render text, and the leanback launcher prints the app
+  name next to the banner itself.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="320dp"
     android:height="180dp"
     android:viewportWidth="320"
     android:viewportHeight="180">
     <path
-        android:fillColor="#0E1115"
+        android:fillColor="#14161C"
         android:pathData="M0,0h320v180h-320z" />
+
+    <!-- panel behind -->
     <path
-        android:fillColor="#2B6CB0"
-        android:pathData="M60,44h200a10,10 0 0 1 10,10v72a10,10 0 0 1 -10,10h-200a10,10 0 0 1 -10,-10v-72a10,10 0 0 1 10,-10z" />
+        android:fillColor="#39D98E"
+        android:pathData="M98,44 L182,44 A10,10 0 0 1 192,54 L192,100 A10,10 0 0 1 182,110 L98,110 A10,10 0 0 1 88,100 L88,54 A10,10 0 0 1 98,44 Z" />
+
+    <!-- panel in front -->
+    <path
+        android:fillColor="#4F9CF9"
+        android:pathData="M130,62 L222,62 A10,10 0 0 1 232,72 L232,124 A10,10 0 0 1 222,134 L130,134 A10,10 0 0 1 120,124 L120,72 A10,10 0 0 1 130,62 Z" />
+
+    <!-- play glyph -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M142,68l44,25l-44,25z" />
+        android:pathData="M162,84 L196,98 L162,112 Z" />
 </vector>

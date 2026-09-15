@@ -19,9 +19,27 @@ android {
         applicationId = "com.zcc09.iptvplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
         vectorDrawables.useSupportLibrary = false
+    }
+
+    // Two distribution channels sharing one codebase:
+    //   github - sideloaded from GitHub Releases; checks the GitHub API and
+    //            installs the downloaded APK itself (needs the install permission)
+    //   play   - published on Google Play; Google Play forbids self-updating, so
+    //            updates go through Play In-App Updates and the restricted
+    //            REQUEST_INSTALL_PACKAGES permission is not declared at all.
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
     }
 
     signingConfigs {
@@ -127,6 +145,11 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+
+    // Google Play in-app updates: only the Play build may use Play's update
+    // mechanism, and only that flavor needs the library.
+    "playImplementation"("com.google.android.play:app-update:2.1.0")
+    "playImplementation"("com.google.android.play:app-update-ktx:2.1.0")
 
     testImplementation("junit:junit:4.13.2")
 }

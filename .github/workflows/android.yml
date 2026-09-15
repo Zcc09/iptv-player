@@ -47,23 +47,40 @@ jobs:
           echo "ANDROID_HOME=$SDK"
           ls "$SDK/platforms" 2>/dev/null || true
 
-      - name: Unit tests (M3U parser, URL tools, TS->HLS segmenter)
-        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+      - name: Unit tests (M3U parser, URL tools, TS->HLS segmenter, version compare)
+        # `test` (not testDebugUnitTest) builds every flavor's sources, so the
+        # play flavor's PlayUpdate code is type-checked here too.
+        run: gradle :app:test --no-daemon --stacktrace
 
-      - name: Assemble debug + release APKs
+      - name: Assemble APKs + Play bundle
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle :app:assembleDebug :app:assembleRelease --no-daemon --stacktrace
+        run: |
+          gradle :app:assembleGithubDebug :app:assembleGithubRelease \
+                 :app:bundlePlayRelease --no-daemon --stacktrace
 
-      - name: Collect APKs
+      - name: Collect build outputs
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/iptv-player-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk out/iptv-player-release.apk
-          cd out && sha256sum *.apk | tee SHA256SUMS.txt && ls -la
+          cp app/build/outputs/apk/github/debug/app-github-debug.apk out/iptv-player-debug.apk
+          cp app/build/outputs/apk/github/release/app-github-release.apk out/iptv-player-release.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab out/internet-tv-player-play.aab
+          cd out && sha256sum *.apk *.aab | tee SHA256SUMS.txt && ls -la
+          echo "--- flavor permission check (manifests are binary: AXML is utf-16, AAB proto is utf-8) ---"
+          has_perm() { strings -el "$1" 2>/dev/null | grep -q REQUEST_INSTALL_PACKAGES \
+                    || strings -a "$1" 2>/dev/null | grep -q REQUEST_INSTALL_PACKAGES; }
+          if has_perm internet-tv-player-play.aab; then
+            echo "FAIL: play bundle declares REQUEST_INSTALL_PACKAGES (Play would reject it)"; exit 1
+          fi
+          echo "OK:   play bundle does NOT declare REQUEST_INSTALL_PACKAGES"
+          if has_perm iptv-player-release.apk; then
+            echo "OK:   github apk still declares REQUEST_INSTALL_PACKAGES (self-update intact)"
+          else
+            echo "FAIL: github apk lost the install permission"; exit 1
+          fi
 
       - uses: actions/upload-artifact@v7
         with:

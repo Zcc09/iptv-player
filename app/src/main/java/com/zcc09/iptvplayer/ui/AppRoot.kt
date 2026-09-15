@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.BuildConfig
+import com.zcc09.iptvplayer.core.PlayUpdate
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.TvDetector
 import com.zcc09.iptvplayer.core.Updater
@@ -59,9 +60,14 @@ fun AppRoot() {
         Nav.push(Screen.Player(request.channel, request.urlOverride))
     }
 
-    // Check for updates on startup
+    // Check for updates on startup. Sideloaded builds poll GitHub Releases;
+    // the Play build asks Google Play instead (silently, no nagging).
     LaunchedEffect(Unit) {
-        Updater.checkForUpdate(currentVersion = BuildConfig.VERSION_NAME, isManual = false)
+        if (BuildConfig.SELF_UPDATE) {
+            Updater.checkForUpdate(currentVersion = BuildConfig.VERSION_NAME, isManual = false)
+        } else {
+            PlayUpdate.checkSilently(context) { Repo.postStatus(it) }
+        }
     }
 
     Box(
@@ -195,7 +201,7 @@ private fun UpdateDialog() {
                 onDismissRequest = { Updater.dismissUpdate() },
                 title = { Text("Update Ready to Install") },
                 text = {
-                    Text("The update has been downloaded. Press Install to update IPTV Player now.")
+                    Text("The update has been downloaded. Press Install to update Internet TV Player now.")
                 },
                 confirmButton = {
                     Button(onClick = { Updater.installApk(context, state.apkFile) }) {

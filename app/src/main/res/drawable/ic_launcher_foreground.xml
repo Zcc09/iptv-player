@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Internet TV Player launcher icon (foreground layer).
+
+  Sibling of the SyncPlayer icon: same dark tile, same accent pair - blue
+  #4F9CF9 and teal #39D98E - and the same white play glyph. Here the two
+  panels read as a screen + the channel behind it, so the family resemblance
+  is obvious without being the same picture.
+
+  Artwork is kept inside the central 66dp safe circle (radius 33 from the
+  54,54 centre) so circular launcher masks cannot clip it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- panel behind: the previous channel -->
+    <path
+        android:fillColor="#39D98E"
+        android:pathData="M36,33 L62,33 A5,5 0 0 1 67,38 L67,53 A5,5 0 0 1 62,58 L36,58 A5,5 0 0 1 31,53 L31,38 A5,5 0 0 1 36,33 Z" />
+
+    <!-- panel in front: the channel being watched -->
+    <path
+        android:fillColor="#4F9CF9"
+        android:pathData="M45,43 L73,43 A5,5 0 0 1 78,48 L78,64 A5,5 0 0 1 73,69 L45,69 A5,5 0 0 1 40,64 L40,48 A5,5 0 0 1 45,43 Z" />
+
+    <!-- play glyph -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,48 L66,56 L51,64 Z" />
+</vector>

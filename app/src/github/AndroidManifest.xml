@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GitHub / sideload flavor.
+
+  This build updates itself: it downloads the new APK from GitHub Releases and
+  hands it to the system package installer. That needs the restricted
+  REQUEST_INSTALL_PACKAGES permission and package-visibility access to the
+  installer, and it is exactly what Google Play forbids - so both are declared
+  here, in the flavor that is distributed as a direct download, and NOT in
+  src/main. The `play` flavor therefore ships without them.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
+</manifest>

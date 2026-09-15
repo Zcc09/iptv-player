@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Internet TV Player</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0 auto; max-width: 46rem; padding: 2.5rem 1.25rem 4rem;
+         background: #14161C; color: #E6E8EC;
+         font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; color: #4F9CF9; }
+  .sub { color: #9AA3B2; margin: 0 0 2rem; }
+  code { background: #1D2027; padding: .1rem .35rem; border-radius: 4px; font-size: .9em; }
+  ul { padding-left: 1.2rem; }
+  li { margin: .35rem 0; }
+  .tag { display: inline-block; background: #123; border: 1px solid #2A6; color: #39D98E;
+         border-radius: 999px; padding: .1rem .6rem; font-size: .8rem; }
+  footer { margin-top: 3rem; color: #6E7684; font-size: .85rem; }
+  a { color: #4F9CF9; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy — Internet TV Player</h1>
+<p class="sub">Last updated: 15 September 2026 &nbsp;·&nbsp; <span class="tag">No data collected</span></p>
+
+<p>
+  Internet TV Player is an Android app that plays IPTV you already have access to. It is a
+  player only: it does not provide, host, or sell any channels, and it has no accounts.
+  This policy explains, honestly and in full, what the app does with information.
+</p>
+
+<h2>The short version</h2>
+<p>
+  <strong>Nothing about you is collected, transmitted to us, or shared with anyone.</strong>
+  There is no analytics, no advertising, no tracking, no crash reporting, and no server of ours
+  that the app talks to.
+</p>
+
+<h2>What the app stores, and where</h2>
+<ul>
+  <li><strong>Your playlists and Xtream Codes details</strong> (server URL, username, password,
+      channel list) are stored <strong>only on your device</strong>, in the app's private storage.</li>
+  <li><strong>Your settings</strong> (interface mode, cast mode, user agent, favourites) are also
+      stored only on your device.</li>
+  <li>We never receive any of it. Uninstalling the app deletes it.</li>
+</ul>
+
+<h2>What leaves your device</h2>
+<ul>
+  <li><strong>Your IPTV provider.</strong> The app requests your playlist and streams directly from
+      the server you configured. Your credentials go to that server and nowhere else.</li>
+  <li><strong>Chromecast (only when you cast).</strong> If your stream is MPEG-TS, the app converts it
+      to HLS <em>on your phone</em> and serves it to your TV over your local Wi-Fi. The stream is not
+      sent anywhere else, and the relay stops when casting stops.</li>
+  <li><strong>Google&nbsp;Play (Play build only).</strong> If you installed the app from Google Play,
+      the app may ask Google Play whether a newer version exists, using the Play In-App Update API.
+      That request is handled by Google Play under
+      <a href="https://policies.google.com/privacy">Google's privacy policy</a>. The app sends no
+      information of its own.</li>
+  <li><strong>GitHub (direct-download build only).</strong> If you installed the APK from GitHub
+      Releases, the app may request
+      <code>api.github.com/repos/Zcc09/iptv-player/releases/latest</code> to see whether a newer
+      version exists. That request contains no personal data, no identifier, and no information about
+      your playlists or viewing. If you tap download, the new APK is fetched from GitHub.</li>
+</ul>
+
+<h2>Permissions and why they exist</h2>
+<ul>
+  <li><code>INTERNET</code>, <code>ACCESS_NETWORK_STATE</code> — fetch playlists and play streams.</li>
+  <li><code>ACCESS_WIFI_STATE</code>, <code>CHANGE_WIFI_MULTICAST_STATE</code> — find Chromecast
+      devices on your local network.</li>
+  <li><code>WAKE_LOCK</code>, <code>FOREGROUND_SERVICE*</code> — keep playback and the cast relay
+      running while the app is in the background.</li>
+  <li><code>REQUEST_INSTALL_PACKAGES</code> — <strong>not present in the Google Play build.</strong>
+      It exists only in the direct-download build so it can install its own update, and it is used
+      for nothing else.</li>
+</ul>
+
+<h2>Children</h2>
+<p>
+  The app is not directed at children, and it collects no data from anyone — including children.
+</p>
+
+<h2>Content responsibility</h2>
+<p>
+  Internet TV Player ships with no playlists, no credentials, and no content. You supply the
+  playlist or Xtream account, and you are responsible for having the right to watch what you load.
+</p>
+
+<h2>Changes</h2>
+<p>
+  If this policy ever changes, the updated version will be published at this address with a new date
+  at the top.
+</p>
+
+<h2>Contact</h2>
+<p>
+  Questions or corrections: open an issue at
+  <a href="https://github.com/Zcc09/iptv-player/issues">github.com/Zcc09/iptv-player/issues</a>.
+</p>
+
+<footer>
+  Internet TV Player is free and open source (MIT). This page is served by GitHub Pages; GitHub may
+  log the request as any web server does.
+</footer>
+
+</body>
+</html>
