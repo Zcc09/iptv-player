@@ -1,10 +1,15 @@
-# IPTV Player (Android)
+# Internet TV Player (Android)
 
 A small, dependency-light Android IPTV player: load a **playlist from an M3U link** or an
 **Xtream Codes (XC) server** with username/password, browse the channel list, watch it in a
 built-in player, **cast it to a TV**, and let the playlist **refresh itself** in the background.
+Also on Google Play, updated there by Play itself.
 
 Built with Kotlin + Jetpack Compose + Media3/ExoPlayer. No ads, no analytics, no accounts.
+
+Two flavors from one codebase: `github` (direct download, updates itself from GitHub Releases)
+and `play` (Google Play, updated through Play In-App Updates — Google forbids self-updating, so
+that flavor does not even declare the install permission).
 
 ## Features
 

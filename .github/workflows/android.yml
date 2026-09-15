@@ -162,16 +162,19 @@ jobs:
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: IPTV Player ${{ steps.tag.outputs.tag }}
+          name: Internet TV Player ${{ steps.tag.outputs.tag }}
           files: out/*
           generate_release_notes: true
           body: |
             Android IPTV player: M3U playlist links and Xtream Codes (XC) accounts,
             channel list with groups/search/favourites, Media3/ExoPlayer playback,
-            Chromecast support with a built-in HLS relay, and automatic background
-            playlist refresh.
+            Chromecast support with a built-in HLS relay, automatic background
+            playlist refresh, and a ten-foot Android TV / gamepad interface.
 
             **Install:** download `iptv-player-release.apk` and open it on your phone
-            (allow "install unknown apps" when prompted).
+            (allow "install unknown apps" when prompted). This build updates itself
+            from GitHub Releases.
 
             `iptv-player-debug.apk` is the same app with the CI end-to-end hooks enabled.
+            `internet-tv-player-play.aab` is the Google Play bundle (that build does not
+            self-update - Google Play handles its updates).
