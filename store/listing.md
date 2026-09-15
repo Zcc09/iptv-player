@@ -107,17 +107,54 @@ python tools/make_play_assets.py
 
 ## Screenshots
 
-Not yet captured. Suggested set (needs a real device or emulator, phone layout):
+Captured automatically from the CI emulator (see `.github/e2e.sh`, "Store screenshots" step) and
+published as the `screenshots` artifact on every run. The step seeds a generic demo playlist first
+(`store/demo-playlist.m3u` + `store/logos/`) so no real provider, credential, or channel name ever
+appears in a public listing.
 
-1. Playlist list — "Your playlists, M3U or Xtream"
-2. Channel list with categories — "Browse every channel"
-3. Player with a live stream — "Watch live"
-4. Cast dialog — "Cast to Chromecast or Android TV"
-5. TV home (landscape) — "Built for the big screen"
-6. Settings — interface mode and updates
+| File | Shot | Suggested listing caption |
+|---|---|---|
+| `1-playlists` | both playlists, M3U + auto-refresh state | "Your playlists — M3U links or Xtream accounts" |
+| `2-channels` | channel list with categories and logos | "Browse every channel, grouped and searchable" |
+| `3-live-player` | live playback, real frame | "Watch live with a full player" |
+| `4-settings` | interface mode, casting, updates | "Tune it to your setup" |
+| `5-tv-home` | ten-foot TV interface (1920×1080) | "Built for the big screen" |
 
-If Android TV distribution is enabled, Play also requires TV screenshots (landscape, 1920×1080) and
-a TV banner.
+Download them from the latest CI run:
+
+```bash
+python tools/get_run_artifacts.py <run-id> screenshots   # helper in tools/ (see below)
+```
+
+If Android TV distribution is enabled, Play additionally requires TV screenshots (1920×1080 — shot
+5 works) and a 400×180 banner asset.
+
+## First upload walkthrough (Play Console)
+
+The first release must go up by hand — Google's API only works from the second one onward.
+
+1. **Register/verify** at https://play.google.com/console — $25, and identity verification must
+   finish before anything can be published.
+2. **Create app** → name `Internet TV Player`, language, *App* (not game), *Free*.
+3. **Set up your app** section, in the order the console nags you:
+   - App access: *all functionality is available without special access* (no login required).
+   - Ads: **No ads**.
+   - Content rating questionnaire: answer no to all content categories (see the section above).
+   - Target audience: 13+ / not designed for children.
+   - News app: no.  COVID-19 tracing: no.  Data safety: **collects no data** (see above).
+   - Government app: no.  Financial features: none.
+   - Privacy policy URL: `https://zcc09.github.io/iptv-player/privacy-policy.html`
+4. **Main store listing** → paste the copy from this file, upload `play/icon-512.png`,
+   `play/feature-graphic-1024x500.png`, and the screenshots.
+5. **Testing → Internal testing** → create a release, upload `internet-tv-player-play.aab`
+   (artifacts from the latest CI run), add yourself as a tester, roll out.
+6. Install from the opt-in link once, confirm the app runs, then move to **Closed testing**
+   (needed for production access on new personal accounts: 12 testers, 14 continuous days).
+7. Production access is granted after that closed test; then promote the release.
+
+Play App Signing: keep it **enabled** (Play holds the app signing key; the CI keystore becomes the
+upload key). Note that Play-signed and sideloaded builds then have different signatures, so a phone
+should have either the Play version or the GitHub APK, not a mix.
 
 ## Release checklist (console side)
 
