@@ -13,16 +13,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Repo
+import com.zcc09.iptvplayer.core.TvDetector
 import kotlinx.coroutines.delay
 
 @Composable
 fun AppRoot() {
     val playRequest by Repo.playRequest.collectAsState()
     val status by Repo.status.collectAsState()
+    val uiModePref by Repo.uiMode.collectAsState()
+    val gamepadActive by TvDetector.gamepadDetected.collectAsState()
+
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+
+    val isTvMode = remember(configuration, uiModePref, gamepadActive) {
+        TvDetector.isTvMode(context, configuration, uiModePref, gamepadActive)
+    }
 
     // Commands (UI or debug hooks) ask for a channel to start playing.
     LaunchedEffect(playRequest) {
@@ -37,7 +50,13 @@ fun AppRoot() {
             .background(MaterialTheme.colorScheme.background)
     ) {
         when (val screen = Nav.current) {
-            is Screen.Home -> PlaylistsScreen()
+            is Screen.Home -> {
+                if (isTvMode) {
+                    TvHomeScreen()
+                } else {
+                    PlaylistsScreen()
+                }
+            }
             is Screen.EditPlaylist -> PlaylistEditScreen(screen.playlistId)
             is Screen.Channels -> ChannelsScreen(screen.playlistId)
             is Screen.Player -> PlayerScreen(screen.channel, screen.urlOverride)

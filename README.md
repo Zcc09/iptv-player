@@ -15,7 +15,28 @@ Built with Kotlin + Jetpack Compose + Media3/ExoPlayer. No ads, no analytics, no
 | **Player** | Media3/ExoPlayer: MPEG-TS, HLS, fMP4, MKV, DASH; fit/crop/stretch aspect modes, previous/next channel, retry on error, picture-in-picture |
 | **Casting** | Chromecast / Google TV / Android TV via the Cast SDK (default media receiver) **plus a built-in HLS relay** so raw MPEG-TS channels can actually be cast |
 | **Auto refresh** | WorkManager job per playlist (15 min … 24 h, or off) + on-launch refresh when the interval has elapsed + manual "refresh all" |
-| **Android TV** | Declares a leanback launcher entry, so the APK can be installed directly on a TV box as an alternative to casting |
+| **Android TV** | Dedicated 10-foot widescreen UI with D-Pad & Gamepad navigation, spotlight channel preview, channel zapping, mini-guide drawer, and dynamic widescreen/remote detection |
+
+## Android TV & Gamepad Interface
+
+The app includes a dedicated 10-foot widescreen interface designed for Android TV remotes, gamepads, and living room displays:
+
+- **Dynamic Activation**:
+  - Automatically activates when started on an Android TV device (`UI_MODE_TYPE_TELEVISION`), Leanback device, or on non-touchscreen TV boxes.
+  - Automatically activates when started in widescreen landscape mode (`screenWidthDp >= 600` in landscape).
+  - Dynamically switches to TV mode the moment any D-pad or Gamepad button is pressed.
+  - User selectable in **Settings → Interface & Controls**: `Auto-detect`, `Android TV & Remote`, or `Mobile Touch`.
+  - Quick-switch button: Tap `📺 TV Mode` in the mobile top bar or `📱 Mobile UI` in the TV top bar anytime.
+- **Remote & Controller Controls**:
+  - **D-Pad / Left Stick**: Move focus smoothly across sidebar categories, playlists, and channel cards (focused cards illuminate with a glowing cyan border and scale up).
+  - **[OK] / (A) Button / Enter**: Select category or play channel fullscreen.
+  - **(Y) Button / Menu / Star**: Quick toggle Favourite for focused or playing channel.
+  - **(X) Button / Search**: Focus quick search filter.
+  - **(B) Button / Back**: Return from channel grid to sidebar, close overlays, or return to home.
+  - **In-Player Controls**:
+    - **Channel Up / Down (or D-Pad Up / Down)**: Direct channel zapping with a brief channel info banner.
+    - **[OK] / (A) / D-Pad Center**: Toggle TV On-Screen Display (OSD) bar with large focusable buttons.
+    - **D-Pad Left / (X)**: Slide out the **Quick Mini-Guide / Channel Drawer** over the video to surf channels while the stream continues playing.
 
 ## Install
 

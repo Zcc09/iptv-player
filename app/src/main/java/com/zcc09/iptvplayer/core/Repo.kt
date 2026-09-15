@@ -30,6 +30,8 @@ object Repo {
     private const val KEY_UA = "user_agent"
     private const val KEY_CAST_MODE = "cast_mode"
     private const val KEY_FAVORITES = "favorites"
+    private const val KEY_UI_MODE = "ui_mode"
+    private const val KEY_TV_SETUP_DISMISSED = "tv_setup_dismissed"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json {
@@ -54,6 +56,12 @@ object Repo {
 
     private val _favorites = MutableStateFlow<Set<String>>(emptySet())
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+
+    private val _uiMode = MutableStateFlow(AppUiMode.AUTO)
+    val uiMode: StateFlow<AppUiMode> = _uiMode.asStateFlow()
+
+    private val _tvSetupDismissed = MutableStateFlow(false)
+    val tvSetupDismissed: StateFlow<Boolean> = _tvSetupDismissed.asStateFlow()
 
     private val _castMode = MutableStateFlow(CastMode.AUTO)
     val castMode: StateFlow<CastMode> = _castMode.asStateFlow()
@@ -81,6 +89,10 @@ object Repo {
             CastMode.valueOf(p.getString(KEY_CAST_MODE, CastMode.AUTO.name) ?: CastMode.AUTO.name)
         }.getOrDefault(CastMode.AUTO)
         _favorites.value = p.getStringSet(KEY_FAVORITES, emptySet())?.toSet() ?: emptySet()
+        _uiMode.value = runCatching {
+            AppUiMode.valueOf(p.getString(KEY_UI_MODE, AppUiMode.AUTO.name) ?: AppUiMode.AUTO.name)
+        }.getOrDefault(AppUiMode.AUTO)
+        _tvSetupDismissed.value = p.getBoolean(KEY_TV_SETUP_DISMISSED, false)
         loadPlaylists()
     }
 
@@ -165,6 +177,21 @@ object Repo {
     fun setCastMode(mode: CastMode) {
         _castMode.value = mode
         prefs?.edit()?.putString(KEY_CAST_MODE, mode.name)?.apply()
+    }
+
+    fun setUiMode(mode: AppUiMode) {
+        _uiMode.value = mode
+        prefs?.edit()?.putString(KEY_UI_MODE, mode.name)?.apply()
+    }
+
+    fun toggleUiMode() {
+        val next = if (_uiMode.value == AppUiMode.TV) AppUiMode.MOBILE else AppUiMode.TV
+        setUiMode(next)
+    }
+
+    fun setTvSetupDismissed(dismissed: Boolean) {
+        _tvSetupDismissed.value = dismissed
+        prefs?.edit()?.putBoolean(KEY_TV_SETUP_DISMISSED, dismissed)?.apply()
     }
 
     fun isFavorite(channelId: String): Boolean = _favorites.value.contains(channelId)

@@ -199,6 +199,14 @@ run_action casttest 10
 assert_log "CAST_(AVAILABLE|INIT_OK|INIT_FAILED)" "cast subsystem initialised or reported as unavailable"
 show_log "CAST_"
 
+step "Android TV & Gamepad mode dynamic activation"
+run_action tvgamepad 8
+assert_log "E2E_TV_GAMEPAD_DETECTED true" "gamepad input dynamically activates TV mode"
+show_log "E2E_TV_"
+run_action tvmode 8
+assert_log "E2E_TV_MODE active=TV" "Android TV interface mode can be activated explicitly"
+show_log "E2E_TV_"
+
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
 if [ "${CRASHES:-0}" -eq 0 ]; then

@@ -64,6 +64,14 @@ object E2e : E2eHandler {
             }
 
             "casttest" -> castProbe(activity)
+            "tvmode" -> {
+                Repo.setUiMode(com.zcc09.iptvplayer.core.AppUiMode.TV)
+                Logx.i("E2E_TV_MODE active=${Repo.uiMode.value}")
+            }
+            "tvgamepad" -> {
+                com.zcc09.iptvplayer.core.TvDetector.notifyInputKey(android.view.KeyEvent.KEYCODE_BUTTON_A)
+                Logx.i("E2E_TV_GAMEPAD_DETECTED ${com.zcc09.iptvplayer.core.TvDetector.gamepadDetected.value}")
+            }
             else -> Logx.w("E2E_UNKNOWN_ACTION $action")
         }
     }

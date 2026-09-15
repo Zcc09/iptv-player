@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.BuildConfig
+import com.zcc09.iptvplayer.core.AppUiMode
 import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Net
 import com.zcc09.iptvplayer.core.RelayManager
@@ -43,6 +44,7 @@ import com.zcc09.iptvplayer.core.Repo
 @Composable
 fun SettingsScreen() {
     val castMode by Repo.castMode.collectAsState()
+    val uiMode by Repo.uiMode.collectAsState()
     val playlists by Repo.playlists.collectAsState()
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
     var relayStatus by remember { mutableStateOf(RelayManager.status()) }
@@ -70,6 +72,52 @@ fun SettingsScreen() {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            Text("Interface & Controls", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Select whether to use the 10-foot Android TV & Remote interface or standard Mobile Touch interface.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = uiMode == AppUiMode.AUTO,
+                    onClick = {
+                        Repo.setUiMode(AppUiMode.AUTO)
+                        Repo.postStatus("Interface mode: Auto-detect")
+                    },
+                    label = { Text("Auto (Widescreen/TV)") }
+                )
+                FilterChip(
+                    selected = uiMode == AppUiMode.TV,
+                    onClick = {
+                        Repo.setUiMode(AppUiMode.TV)
+                        Repo.postStatus("Interface mode: Android TV & Remote")
+                    },
+                    label = { Text("Android TV & Remote") }
+                )
+                FilterChip(
+                    selected = uiMode == AppUiMode.MOBILE,
+                    onClick = {
+                        Repo.setUiMode(AppUiMode.MOBILE)
+                        Repo.postStatus("Interface mode: Mobile Touch")
+                    },
+                    label = { Text("Mobile Touch") }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = {
+                Repo.setTvSetupDismissed(false)
+                Repo.postStatus("TV & Gamepad guide will show on next TV launch")
+            }) {
+                Text("Show TV & Gamepad Guide on next launch")
+            }
+
+            Spacer(Modifier.height(18.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             Text("Playback", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(

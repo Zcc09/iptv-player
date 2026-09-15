@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.zcc09.iptvplayer.core.AppUiMode
 import com.zcc09.iptvplayer.core.Playlist
 import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.Repo
@@ -62,6 +63,12 @@ fun PlaylistsScreen() {
             TopAppBar(
                 title = { Text("IPTV Player") },
                 actions = {
+                    TextButton(onClick = {
+                        Repo.setUiMode(AppUiMode.TV)
+                        Repo.postStatus("Switched to Android TV & Gamepad mode")
+                    }) {
+                        Text("📺 TV Mode")
+                    }
                     IconButton(onClick = {
                         Repo.postStatus("Refreshing all playlists…")
                         Repo.refreshAllAsync()

@@ -4,6 +4,13 @@ import kotlinx.serialization.Serializable
 
 enum class PlaylistType { M3U, XTREAM }
 
+/** Interface mode: Auto-detect (TV/widescreen/gamepad), Force Android TV, or Force Mobile. */
+enum class AppUiMode {
+    AUTO,
+    TV,
+    MOBILE
+}
+
 /** Cast behaviour for a playlist. */
 enum class CastMode {
     /** HLS sources are cast directly, everything else goes through the on-device HLS relay. */
