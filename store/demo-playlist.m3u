@@ -1,21 +1,49 @@
 #EXTM3U
-#EXTINF:-1 tvg-name="World News HD" group-title="News",World News HD
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Headlines 24" group-title="News",Headlines 24
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Cinema One" group-title="Movies",Cinema One
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Classic Films" group-title="Movies",Classic Films
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Sports Live" group-title="Sports",Sports Live
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Motorsport TV" group-title="Sports",Motorsport TV
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Kids & Family" group-title="Kids",Kids & Family
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Documentaries" group-title="Docs",Documentaries
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Nature 4K" group-title="Documentaries",Nature 4K
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
-#EXTINF:-1 tvg-name="Music Videos" group-title="Music",Music Videos
-https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
+#EXTINF:-1 tvg-id="world-news" tvg-name="World News HD" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/world-news-hd.png" group-title="News",World News HD
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="headlines-24" tvg-name="Headlines 24" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/headlines-24.png" group-title="News",Headlines 24
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="global-report" tvg-name="Global Report" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/global-report.png" group-title="News",Global Report
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="cinema-one" tvg-name="Cinema One" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/cinema-one.png" group-title="Movies",Cinema One
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="classic-films" tvg-name="Classic Films" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/classic-films.png" group-title="Movies",Classic Films
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="prime-movies" tvg-name="Prime Movies" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/prime-movies.png" group-title="Movies",Prime Movies
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="sports-live" tvg-name="Sports Live" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/sports-live.png" group-title="Sports",Sports Live
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="motorsport-tv" tvg-name="Motorsport TV" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/motorsport-tv.png" group-title="Sports",Motorsport TV
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="extreme-sports" tvg-name="Extreme Sports" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/extreme-sports.png" group-title="Sports",Extreme Sports
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="kids-club" tvg-name="Kids Club" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/kids-club.png" group-title="Kids",Kids Club
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="cartoon-cave" tvg-name="Cartoon Cave" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/cartoon-cave.png" group-title="Kids",Cartoon Cave
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="wild-earth" tvg-name="Wild Earth" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/wild-earth.png" group-title="Documentaries",Wild Earth
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="nature-4k" tvg-name="Nature 4K" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/nature-4k.png" group-title="Documentaries",Nature 4K
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="history-vault" tvg-name="History Vault" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/history-vault.png" group-title="Documentaries",History Vault
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="music-videos" tvg-name="Music Videos" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/music-videos.png" group-title="Music",Music Videos
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="dance-hits" tvg-name="Dance Hits" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/dance-hits.png" group-title="Music",Dance Hits
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="retro-tunes" tvg-name="Retro Tunes" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/retro-tunes.png" group-title="Music",Retro Tunes
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="the-kitchen" tvg-name="The Kitchen" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/the-kitchen.png" group-title="Lifestyle",The Kitchen
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="travel-guide" tvg-name="Travel Guide" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/travel-guide.png" group-title="Lifestyle",Travel Guide
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="home-and-garden" tvg-name="Home and Garden" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/home-and-garden.png" group-title="Lifestyle",Home and Garden
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="tech-today" tvg-name="Tech Today" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/tech-today.png" group-title="Tech",Tech Today
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="laugh-track" tvg-name="Laugh Track" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/laugh-track.png" group-title="Entertainment",Laugh Track
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="drama-zone" tvg-name="Drama Zone" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/drama-zone.png" group-title="Entertainment",Drama Zone
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="sci-fi-world" tvg-name="Sci-Fi World" tvg-logo="https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/logos/sci-fi-world.png" group-title="Entertainment",Sci-Fi World
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8

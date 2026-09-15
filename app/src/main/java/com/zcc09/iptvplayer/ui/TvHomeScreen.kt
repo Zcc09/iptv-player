@@ -389,7 +389,7 @@ private fun TvTopBar(
         // App brand & TV Badge
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "📺 IPTV PLAYER",
+                text = "📺 INTERNET TV PLAYER",
                 fontWeight = FontWeight.Black,
                 fontSize = 18.sp,
                 color = Color.White

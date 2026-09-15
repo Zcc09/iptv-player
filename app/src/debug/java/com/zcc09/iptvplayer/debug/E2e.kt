@@ -45,6 +45,9 @@ object E2e : E2eHandler {
     private const val DEMO_PLAYLIST_URL =
         "https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/demo-playlist.m3u"
 
+    /** Which demo channel to open for the player screenshot. */
+    private const val DEMO_PLAY_CHANNEL = "Cinema One"
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun handle(activity: Activity, action: String, extras: Map<String, String>) {
@@ -110,6 +113,25 @@ object E2e : E2eHandler {
             "tvdismiss" -> {
                 Repo.setTvSetupDismissed(true)
                 Logx.i("E2E_TV_SETUP_DISMISSED")
+            }
+            // Phone shots must not inherit the TV mode that the tvmode test set.
+            "mobilemode" -> {
+                Repo.setUiMode(com.zcc09.iptvplayer.core.AppUiMode.MOBILE)
+                Logx.i("E2E_UI_MODE active=${Repo.uiMode.value}")
+            }
+            // Play a demo channel (nice-looking public stream) for the player shot,
+            // rather than the CI test stream.
+            "playdemo" -> {
+                val channel = Repo.playlists.value
+                    .flatMap { Repo.channelsOf(it.id) }
+                    .firstOrNull { it.name == DEMO_PLAY_CHANNEL }
+                    ?: Repo.playlists.value.firstOrNull()?.let { Repo.channelsOf(it.id).firstOrNull() }
+                if (channel == null) {
+                    Logx.w("E2E_PLAYDEMO_NO_CHANNEL")
+                } else {
+                    Logx.i("E2E_PLAY_REQUEST demo ${channel.name} ${channel.url}")
+                    Repo.requestPlay(channel)
+                }
             }
             "openchannels" -> {
                 val playlist = Repo.playlists.value.firstOrNull()

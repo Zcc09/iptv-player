@@ -271,15 +271,18 @@ fi
 show_log "UPDATE_INSTALL_"
 
 step "Store screenshots (generic demo playlist, no provider details)"
-# Uses a demo playlist served from this repo (generic channel names) so the
-# store listing never shows a real provider, credential, or channel name, and
-# dismisses the first-run TV dialog so the ten-foot layout is unobstructed.
+# Uses a demo playlist served from this repo (generic channel names, generated
+# logo tiles, public test streams) so the store listing never shows a real
+# provider, credential, or channel name. The suite set TV mode earlier, so the
+# phone shots explicitly switch back to the mobile layout first.
+run_action mobilemode 8
 run_action demo 50
 assert_log "E2E_DEMO_SEEDED .*channels=[1-9][0-9]*" "demo playlist loaded for the screenshots"
 shot 1-playlists
 run_action openchannels 15
 shot 2-channels
-run_action playtest 45
+run_action playdemo 50
+assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the demo channel actually renders video"
 shot 3-live-player
 run_action opensettings 12
 shot 4-settings
