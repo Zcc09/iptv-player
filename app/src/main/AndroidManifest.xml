@@ -17,6 +17,15 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- Android 11+ package visibility: without this the updater cannot see the
+         system package installer when it resolves the install intent. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="true"

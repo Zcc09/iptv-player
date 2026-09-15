@@ -236,6 +236,11 @@ if echo "$LOG" | grep -qE "UPDATE_INSTALL_URI uri=content://"; then
 else
   fail "installer hand-off failed (no UPDATE_INSTALL_URI content:// line)"
 fi
+if echo "$LOG" | grep -qE "UPDATE_INSTALL_LAUNCHED uri=content://"; then
+  pass "system package installer accepted the APK install intent"
+else
+  fail "system installer did not accept the install intent"
+fi
 show_log "UPDATE_INSTALL_"
 
 step "Crash check"

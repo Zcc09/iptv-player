@@ -264,11 +264,11 @@ object Updater {
             }
             val handler = intent.resolveActivity(context.packageManager)
             Logx.i("UPDATE_INSTALL_INTENT handler=${handler?.packageName ?: "none"}")
-            if (handler == null) {
-                Repo.postStatus("Update downloaded — no APK installer on this device")
-                return
-            }
+            // Always attempt the launch: resolveActivity() is subject to package
+            // visibility filtering, so a null result does not mean no installer
+            // exists. A genuinely unresolvable intent is caught below.
             context.startActivity(intent)
+            Logx.i("UPDATE_INSTALL_LAUNCHED uri=$uri")
             Repo.postStatus("Opening the installer to update IPTV Player")
         } catch (t: Throwable) {
             Logx.e("Failed to start installer intent", t)
