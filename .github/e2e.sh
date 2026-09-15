@@ -90,6 +90,16 @@ run_action() { # action, seconds to wait
 shot() { # <name>
   local out="screenshots/$1.png"
   mkdir -p screenshots
+  # Record which window is actually in front. A system dialog (an ANR box, a
+  # permission prompt) is a system window that takes focus from the app: that is
+  # how an earlier set shipped with "isn't responding" baked into every shot.
+  local focus
+  focus=$(timeout 30 adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | tr -d '\r' | sed 's/^ *//')
+  echo "     ($focus)"
+  case "$focus" in
+    *iptvplayer*) : ;;
+    *) echo "  ⚠️  warning: the app is not the focused window - $1 may capture the wrong thing" ;;
+  esac
   if timeout 60 adb exec-out screencap -p > "$out" 2>/dev/null && [ -s "$out" ]; then
     echo "  📸 $out ($(wc -c < "$out") bytes)"
   else
@@ -124,6 +134,13 @@ timeout 60 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /de
 timeout 60 adb shell wm dismiss-keyguard > /dev/null 2>&1 || true
 timeout 60 adb shell input keyevent KEYCODE_WAKEUP > /dev/null 2>&1 || true
 timeout 60 adb shell settings put system screen_off_timeout 1800000 > /dev/null 2>&1 || true
+# The headless emulator's own launcher ANRs under the software GPU. That dialog
+# is a SYSTEM window: it takes the window from the app, so uiautomator dumps the
+# dialog (every UI assertion then fails with "not found") and the dialog is baked
+# into every screenshot. Suppress crash/ANR dialogs for the whole run.
+timeout 60 adb shell settings put global hide_error_dialogs 1 > /dev/null 2>&1 || true
+timeout 60 adb shell settings put secure anr_show_background 0 > /dev/null 2>&1 || true
+echo "  (error dialogs suppressed: hide_error_dialogs=$(timeout 30 adb shell settings get global hide_error_dialogs 2>/dev/null | tr -d '\r'))"
 timeout 60 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || echo "     (first launch timed out)"
 sleep 5
 
