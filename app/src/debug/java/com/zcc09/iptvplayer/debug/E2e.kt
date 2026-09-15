@@ -72,6 +72,74 @@ object E2e : E2eHandler {
                 com.zcc09.iptvplayer.core.TvDetector.notifyInputKey(android.view.KeyEvent.KEYCODE_BUTTON_A)
                 Logx.i("E2E_TV_GAMEPAD_DETECTED ${com.zcc09.iptvplayer.core.TvDetector.gamepadDetected.value}")
             }
+            "navhints" -> {
+                val next = !Repo.showNavHints.value
+                Repo.setShowNavHints(next)
+                Logx.i("E2E_NAV_HINTS visible=${Repo.showNavHints.value}")
+            }
+            "updatecheck" -> scope.launch {
+                try {
+                    val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                    val currentVersion = pkgInfo.versionName ?: ""
+                    Logx.i("E2E_UPDATE_CHECK_START currentVersion=$currentVersion")
+                    val info = com.zcc09.iptvplayer.core.Updater.checkForUpdate(currentVersion, isManual = true)
+                    if (info == null) {
+                        val state = com.zcc09.iptvplayer.core.Updater.state.value
+                        if (state is com.zcc09.iptvplayer.core.UpdateState.Error) {
+                            Logx.i("E2E_UPDATE_CHECK_ERROR ${state.message}")
+                        } else {
+                            Logx.i("E2E_UPDATE_CHECK_UP_TO_DATE current=$currentVersion")
+                        }
+                    } else {
+                        Logx.i(
+                            "E2E_UPDATE_CHECK_AVAILABLE tag=${info.versionName} title=${info.title} " +
+                                "size=${info.apkSize} url=${info.apkUrl}"
+                        )
+                    }
+                } catch (t: Throwable) {
+                    Logx.e("E2E_UPDATE_CHECK_FAILED", t)
+                }
+            }
+            "updatedownload" -> scope.launch {
+                try {
+                    // Force the latest GitHub release to be "newer" by comparing against
+                    // 0.0.1, so the full download path is exercised in CI.
+                    val info = com.zcc09.iptvplayer.core.Updater.checkForUpdate("0.0.1", isManual = true)
+                    if (info == null) {
+                        val state = com.zcc09.iptvplayer.core.Updater.state.value
+                        if (state is com.zcc09.iptvplayer.core.UpdateState.Error) {
+                            Logx.i("E2E_UPDATE_DOWNLOAD_ERROR ${state.message}")
+                        } else {
+                            Logx.i("E2E_UPDATE_DOWNLOAD_NO_UPDATE")
+                        }
+                        return@launch
+                    }
+                    Logx.i("E2E_UPDATE_DOWNLOAD_START tag=${info.versionName} size=${info.apkSize}")
+                    com.zcc09.iptvplayer.core.Updater.startDownload(activity, info)
+                    val deadline = System.currentTimeMillis() + 180_000
+                    while (System.currentTimeMillis() < deadline) {
+                        val state = com.zcc09.iptvplayer.core.Updater.state.value
+                        when (state) {
+                            is com.zcc09.iptvplayer.core.UpdateState.ReadyToInstall -> {
+                                Logx.i(
+                                    "E2E_UPDATE_DOWNLOADED path=${state.apkFile.path} " +
+                                        "bytes=${state.apkFile.length()}"
+                                )
+                                return@launch
+                            }
+                            is com.zcc09.iptvplayer.core.UpdateState.Error -> {
+                                Logx.i("E2E_UPDATE_DOWNLOAD_ERROR ${state.message}")
+                                return@launch
+                            }
+                            else -> {}
+                        }
+                        delay(3000)
+                    }
+                    Logx.w("E2E_UPDATE_DOWNLOAD_TIMEOUT")
+                } catch (t: Throwable) {
+                    Logx.e("E2E_UPDATE_DOWNLOAD_FAILED", t)
+                }
+            }
             else -> Logx.w("E2E_UNKNOWN_ACTION $action")
         }
     }

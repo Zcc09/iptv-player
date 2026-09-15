@@ -16,6 +16,7 @@ Built with Kotlin + Jetpack Compose + Media3/ExoPlayer. No ads, no analytics, no
 | **Casting** | Chromecast / Google TV / Android TV via the Cast SDK (default media receiver) **plus a built-in HLS relay** so raw MPEG-TS channels can actually be cast |
 | **Auto refresh** | WorkManager job per playlist (15 min … 24 h, or off) + on-launch refresh when the interval has elapsed + manual "refresh all" |
 | **Android TV** | Dedicated 10-foot widescreen UI with D-Pad & Gamepad navigation, spotlight channel preview, channel zapping, mini-guide drawer, and dynamic widescreen/remote detection |
+| **In-app updater** | Checks the GitHub release on launch (and on demand from Settings), pops a dialog with release notes, downloads the new APK with a progress bar and opens the installer — no app store needed |
 
 ## Android TV & Gamepad Interface
 
@@ -37,6 +38,25 @@ The app includes a dedicated 10-foot widescreen interface designed for Android T
     - **Channel Up / Down (or D-Pad Up / Down)**: Direct channel zapping with a brief channel info banner.
     - **[OK] / (A) / D-Pad Center**: Toggle TV On-Screen Display (OSD) bar with large focusable buttons.
     - **D-Pad Left / (X)**: Slide out the **Quick Mini-Guide / Channel Drawer** over the video to surf channels while the stream continues playing.
+- **Navigation Hints Toggle**: The button-shortcut prompt bars (bottom of the TV home screen and under the player OSD) can be shown or hidden in **Settings → Controller & Remote Navigation Hints** — handy for screenshots or when the prompts are already familiar.
+
+## In-app updater
+
+IPTV Player ships straight from GitHub Releases, so it updates itself from the app:
+
+* On every launch (throttled to once per 10 minutes) it queries
+  `api.github.com/repos/Zcc09/iptv-player/releases/latest` and compares the
+  `versionName` with the installed one (numeric semver compare, `1.10.0 > 1.9.0`).
+* When something newer is out, a dialog pops up with the release title, size and
+  notes, plus **Download & Install** / **Later**.
+* The download streams to the app's cache directory with a live progress bar;
+  when it finishes the dialog offers **Install**, which hands the APK to the
+  system package installer via a `FileProvider` URI (the app only requests
+  `REQUEST_INSTALL_PACKAGES` when you actually try to install).
+* **Settings → Updates → Check for updates now** forces an immediate re-check and
+  shows the result (up to date / error) in the status banner.
+* Because every release is signed with the same keystore, the downloaded APK
+  installs straight over the previous version.
 
 ## Install
 
@@ -78,7 +98,7 @@ if the download fails, and record the last error per playlist so you can see wha
 
 ```bash
 gradle :app:assembleDebug        # or open the folder in Android Studio
-gradle :app:testDebugUnitTest    # M3U parser, URL tools, TS->HLS segmenter
+gradle :app:testDebugUnitTest    # M3U parser, URL tools, TS->HLS segmenter, version compare
 ```
 
 Toolchain: AGP 9.4.0 (built-in Kotlin), Gradle 9.7.1, Kotlin compiler plugins 2.4.20,
@@ -103,7 +123,10 @@ on tags/manual dispatch, and runs a real **end-to-end job on an Android emulator
 6. starts the HLS relay, validates the playlist and a segment on-device *and* from the host
    (188-byte TS sync + PAT packet), then plays the relay's own HLS output back through the player,
 7. exercises the Chromecast code path and asserts it degrades gracefully,
-8. fails the build on any `FATAL EXCEPTION` or ANR.
+8. toggles the navigation-hints setting and asserts the state flips both ways,
+9. exercises the in-app updater against the real GitHub API: a version check, then a
+   full APK download through the app's downloader,
+10. fails the build on any `FATAL EXCEPTION` or ANR.
 
 ## Layout
 

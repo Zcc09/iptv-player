@@ -82,7 +82,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     # A wedged emulator must fail the job, not hang it for hours.
-    timeout-minutes: 40
+    # (Bumped for the updater step, which performs a real ~15 MB APK download.)
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v7
 

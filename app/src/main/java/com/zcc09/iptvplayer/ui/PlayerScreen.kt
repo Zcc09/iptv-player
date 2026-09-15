@@ -119,6 +119,7 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     var showZapBanner by remember { mutableStateOf(false) }
     var showChannelDrawer by remember { mutableStateOf(false) }
     var videoSizeText by remember { mutableStateOf<String?>(null) }
+    val showNavHints by Repo.showNavHints.collectAsState()
     val focusRequester = remember { FocusRequester() }
 
     val exo = remember(channel.id) { Playback.createPlayer(context, Repo.userAgent) }
@@ -683,17 +684,19 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                     }
 
                     Spacer(Modifier.height(6.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        RemoteButtonHint(buttonLabel = "▲/▼", actionName = "Zap Channel")
-                        Spacer(Modifier.width(10.dp))
-                        RemoteButtonHint(buttonLabel = "◄/►", actionName = "Mini Guide")
-                        Spacer(Modifier.width(10.dp))
-                        RemoteButtonHint(buttonLabel = "[A]/OK", actionName = "Toggle OSD")
-                        Spacer(Modifier.width(10.dp))
-                        RemoteButtonHint(buttonLabel = "[B]/Back", actionName = "Close/Exit")
+                    if (showNavHints) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            RemoteButtonHint(buttonLabel = "▲/▼", actionName = "Zap Channel")
+                            Spacer(Modifier.width(10.dp))
+                            RemoteButtonHint(buttonLabel = "◄/►", actionName = "Mini Guide")
+                            Spacer(Modifier.width(10.dp))
+                            RemoteButtonHint(buttonLabel = "[A]/OK", actionName = "Toggle OSD")
+                            Spacer(Modifier.width(10.dp))
+                            RemoteButtonHint(buttonLabel = "[B]/Back", actionName = "Close/Exit")
+                        }
                     }
                 }
             }

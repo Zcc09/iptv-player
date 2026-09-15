@@ -22,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -30,7 +31,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.BuildConfig
@@ -39,12 +42,16 @@ import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Net
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
+import com.zcc09.iptvplayer.core.Updater
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
+    val scope = rememberCoroutineScope()
     val castMode by Repo.castMode.collectAsState()
     val uiMode by Repo.uiMode.collectAsState()
+    val showNavHints by Repo.showNavHints.collectAsState()
     val playlists by Repo.playlists.collectAsState()
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
     var relayStatus by remember { mutableStateOf(RelayManager.status()) }
@@ -104,6 +111,26 @@ fun SettingsScreen() {
                         Repo.postStatus("Interface mode: Mobile Touch")
                     },
                     label = { Text("Mobile Touch") }
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Controller & Remote Navigation Hints", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Show button shortcut prompts at the bottom of the TV screen and in the video player OSD.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = showNavHints,
+                    onCheckedChange = { Repo.setShowNavHints(it) }
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -210,6 +237,29 @@ fun SettingsScreen() {
                 Repo.postStatus("Refreshing all playlists…")
                 Repo.refreshAllAsync()
             }) { Text("Refresh all now") }
+
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            Text("Updates", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Current version: v${BuildConfig.VERSION_NAME}\n" +
+                    "IPTV Player checks GitHub releases for updates. When a new version is released, " +
+                    "it can be downloaded and installed directly from the app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                scope.launch {
+                    Repo.postStatus("Checking GitHub for updates…")
+                    Updater.checkForUpdate(BuildConfig.VERSION_NAME, isManual = true)
+                }
+            }) {
+                Text("Check for updates now")
+            }
 
             Spacer(Modifier.height(22.dp))
             HorizontalDivider()

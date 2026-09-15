@@ -32,6 +32,7 @@ object Repo {
     private const val KEY_FAVORITES = "favorites"
     private const val KEY_UI_MODE = "ui_mode"
     private const val KEY_TV_SETUP_DISMISSED = "tv_setup_dismissed"
+    private const val KEY_NAV_HINTS = "show_nav_hints"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json {
@@ -63,6 +64,9 @@ object Repo {
     private val _tvSetupDismissed = MutableStateFlow(false)
     val tvSetupDismissed: StateFlow<Boolean> = _tvSetupDismissed.asStateFlow()
 
+    private val _showNavHints = MutableStateFlow(true)
+    val showNavHints: StateFlow<Boolean> = _showNavHints.asStateFlow()
+
     private val _castMode = MutableStateFlow(CastMode.AUTO)
     val castMode: StateFlow<CastMode> = _castMode.asStateFlow()
 
@@ -93,6 +97,7 @@ object Repo {
             AppUiMode.valueOf(p.getString(KEY_UI_MODE, AppUiMode.AUTO.name) ?: AppUiMode.AUTO.name)
         }.getOrDefault(AppUiMode.AUTO)
         _tvSetupDismissed.value = p.getBoolean(KEY_TV_SETUP_DISMISSED, false)
+        _showNavHints.value = p.getBoolean(KEY_NAV_HINTS, true)
         loadPlaylists()
     }
 
@@ -192,6 +197,11 @@ object Repo {
     fun setTvSetupDismissed(dismissed: Boolean) {
         _tvSetupDismissed.value = dismissed
         prefs?.edit()?.putBoolean(KEY_TV_SETUP_DISMISSED, dismissed)?.apply()
+    }
+
+    fun setShowNavHints(show: Boolean) {
+        _showNavHints.value = show
+        prefs?.edit()?.putBoolean(KEY_NAV_HINTS, show)?.apply()
     }
 
     fun isFavorite(channelId: String): Boolean = _favorites.value.contains(channelId)

@@ -94,6 +94,7 @@ fun TvHomeScreen() {
     val favorites by Repo.favorites.collectAsState()
     val busy by Repo.busy.collectAsState()
     val tvSetupDismissed by Repo.tvSetupDismissed.collectAsState()
+    val showNavHints by Repo.showNavHints.collectAsState()
 
     var showTvSetupDialog by remember { mutableStateOf(!tvSetupDismissed) }
 
@@ -242,6 +243,7 @@ fun TvHomeScreen() {
                             TvChannelSpotlight(
                                 channel = channel,
                                 isFavorite = favorites.contains(channel.id),
+                                showNavHints = showNavHints,
                                 onPlay = { Nav.push(Screen.Player(channel)) },
                                 onToggleFavorite = {
                                     Repo.toggleFavorite(channel.id)
@@ -343,7 +345,9 @@ fun TvHomeScreen() {
             }
 
             // ------------------------------------------------------------- BOTTOM PROMPT BAR
-            TvBottomPromptBar()
+            if (showNavHints) {
+                TvBottomPromptBar()
+            }
         }
 
         // ---------------------------------------------------------------- FIRST-TIME SETUP DIALOG
@@ -591,6 +595,7 @@ private fun TvSidebar(
 private fun TvChannelSpotlight(
     channel: Channel,
     isFavorite: Boolean,
+    showNavHints: Boolean,
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -667,16 +672,18 @@ private fun TvChannelSpotlight(
 
                     Spacer(Modifier.height(8.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RemoteButtonHint(buttonLabel = "OK / A", actionName = "Play Fullscreen")
-                        Spacer(Modifier.width(12.dp))
-                        RemoteButtonHint(
-                            buttonLabel = "Y",
-                            actionName = if (isFavorite) "Remove Favourite" else "Add Favourite",
-                            buttonColor = Color(0xFF475569)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        RemoteButtonHint(buttonLabel = "X", actionName = "Search", buttonColor = Color(0xFF475569))
+                    if (showNavHints) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RemoteButtonHint(buttonLabel = "OK / A", actionName = "Play Fullscreen")
+                            Spacer(Modifier.width(12.dp))
+                            RemoteButtonHint(
+                                buttonLabel = "Y",
+                                actionName = if (isFavorite) "Remove Favourite" else "Add Favourite",
+                                buttonColor = Color(0xFF475569)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            RemoteButtonHint(buttonLabel = "X", actionName = "Search", buttonColor = Color(0xFF475569))
+                        }
                     }
                 }
 

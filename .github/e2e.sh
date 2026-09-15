@@ -207,6 +207,31 @@ run_action tvmode 8
 assert_log "E2E_TV_MODE active=TV" "Android TV interface mode can be activated explicitly"
 show_log "E2E_TV_"
 
+step "Navigation hints toggle"
+run_action navhints 8
+assert_log "E2E_NAV_HINTS visible=false" "navigation hints can be turned off"
+run_action navhints 8
+assert_log "E2E_NAV_HINTS visible=true" "navigation hints can be turned back on"
+show_log "E2E_NAV_"
+
+step "In-app updater: check GitHub releases and download a new APK"
+run_action updatecheck 45
+if echo "$LOG" | grep -qE "E2E_UPDATE_CHECK_UP_TO_DATE|E2E_UPDATE_CHECK_AVAILABLE"; then
+  pass "updater reached GitHub and compared versions"
+else
+  fail "updater did not reach GitHub / compare versions (no E2E_UPDATE_CHECK_ line)"
+fi
+show_log "E2E_UPDATE_CHECK"
+run_action updatedownload 240
+if echo "$LOG" | grep -qE "E2E_UPDATE_DOWNLOADED bytes=[1-9][0-9]*"; then
+  pass "updater downloaded a full APK from GitHub"
+elif echo "$LOG" | grep -q "E2E_UPDATE_DOWNLOAD_NO_UPDATE"; then
+  pass "updater reported no newer release (expected when CI tag == app version)"
+else
+  fail "updater did not complete a download (no E2E_UPDATE_DOWNLOADED line)"
+fi
+show_log "E2E_UPDATE_DOWNLOAD"
+
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
 if [ "${CRASHES:-0}" -eq 0 ]; then
