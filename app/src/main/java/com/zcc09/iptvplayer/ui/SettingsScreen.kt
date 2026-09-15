@@ -2,6 +2,7 @@ package com.zcc09.iptvplayer.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,7 +91,12 @@ fun SettingsScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow, not Row: three chips do not fit on a phone width, and a plain
+            // Row squeezes the last one until its label stacks vertically.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 FilterChip(
                     selected = uiMode == AppUiMode.AUTO,
                     onClick = {
