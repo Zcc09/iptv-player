@@ -69,18 +69,11 @@ jobs:
           cp app/build/outputs/apk/github/release/app-github-release.apk out/iptv-player-release.apk
           cp app/build/outputs/bundle/playRelease/app-play-release.aab out/internet-tv-player-play.aab
           cd out && sha256sum *.apk *.aab | tee SHA256SUMS.txt && ls -la
-          echo "--- flavor permission check (manifests are binary: AXML is utf-16, AAB proto is utf-8) ---"
-          has_perm() { strings -el "$1" 2>/dev/null | grep -q REQUEST_INSTALL_PACKAGES \
-                    || strings -a "$1" 2>/dev/null | grep -q REQUEST_INSTALL_PACKAGES; }
-          if has_perm internet-tv-player-play.aab; then
-            echo "FAIL: play bundle declares REQUEST_INSTALL_PACKAGES (Play would reject it)"; exit 1
-          fi
-          echo "OK:   play bundle does NOT declare REQUEST_INSTALL_PACKAGES"
-          if has_perm iptv-player-release.apk; then
-            echo "OK:   github apk still declares REQUEST_INSTALL_PACKAGES (self-update intact)"
-          else
-            echo "FAIL: github apk lost the install permission"; exit 1
-          fi
+
+      - name: Verify flavor permissions
+        # The Play bundle must not declare REQUEST_INSTALL_PACKAGES (Play rejects
+        # apps that self-update); the sideloaded APK must still declare it.
+        run: python3 tools/check_flavor_permissions.py out/internet-tv-player-play.aab out/iptv-player-release.apk
 
       - uses: actions/upload-artifact@v7
         with:
