@@ -43,6 +43,39 @@ assert_log() { # pattern, description
   if echo "$LOG" | grep -qE "$1"; then pass "$2"; else fail "$2 (no log line matching /$1/)"; fi
 }
 
+# Dump the on-screen view hierarchy. uiautomator occasionally answers without the
+# app window (a restart, an animation, a slow frame), and a failed dump used to
+# leave the PREVIOUS dump file behind - so always clear it first, surface the
+# tool's own output, and let callers retry.
+ui_dump() { # <remote-path>
+  local path="$1" out
+  timeout 30 adb shell rm -f "$path" > /dev/null 2>&1 || true
+  out=$(timeout 90 adb shell uiautomator dump "$path" 2>&1 | tr -d '\r')
+  [ -n "$out" ] && echo "     (uiautomator: $out)" >&2
+  timeout 60 adb shell cat "$path" 2>/dev/null || echo ""
+}
+
+# UI text assertions get one retry, and print the dump when they still fail, so
+# a red run is diagnosable instead of just "not found".
+assert_ui() { # <xml> <pattern> <description>
+  if echo "$1" | grep -qE "$2"; then
+    pass "$3"
+    return 0
+  fi
+  sleep 6
+  local retry
+  retry=$(ui_dump "$4")
+  if echo "$retry" | grep -qE "$2"; then
+    pass "$3 (after retry)"
+    return 0
+  fi
+  fail "$3"
+  echo "     --- first 700 chars of the view hierarchy ---"
+  echo "$retry" | head -c 700
+  echo
+  return 1
+}
+
 run_action() { # action, seconds to wait
   timeout 30 adb logcat -c > /dev/null 2>&1 || echo "     (logcat -c failed)"
   timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
@@ -115,27 +148,28 @@ assert_log "REFRESH_ALL_DONE channels=[1-9][0-9]*" "refresh-all re-downloaded ch
 show_log "REFRESH|AUTO_REFRESH"
 
 step "State dump (auto-refresh scheduling + cached channels)"
-run_action dump 8
+# 12s (not 8) so the home screen has settled before the very next step dumps the
+# view hierarchy - a dump taken mid-render is what failed the UI checks.
+run_action dump 12
 assert_log "E2E_PLAYLIST .*channels=[1-9][0-9]*" "channels cached for a playlist"
 assert_log "E2E_PLAYLIST .*autoRefresh=true" "auto-refresh enabled on the playlist"
 assert_log "E2E_CHANNEL" "channel entries logged"
 show_log "E2E_PLAYLIST|E2E_CHANNEL"
 
 step "Playlist screen renders the downloaded data"
-timeout 90 adb shell uiautomator dump /sdcard/ui-home.xml > /dev/null 2>&1 || echo "     (uiautomator dump failed)"
-UI=$(timeout 60 adb shell cat /sdcard/ui-home.xml 2>/dev/null || echo "")
+UI=$(ui_dump /sdcard/ui-home.xml)
 if [ -z "$UI" ]; then
   fail "could not read the UI hierarchy"
 else
-  if echo "$UI" | grep -q "CI M3U playlist"; then
-    pass "playlist visible in the UI"
-  else
-    fail "playlist not found in the UI hierarchy"
-  fi
+  assert_ui "$UI" "CI M3U playlist" "playlist visible in the UI" /sdcard/ui-home.xml
+  UI=$(ui_dump /sdcard/ui-home.xml)
   if echo "$UI" | grep -qiE "channels"; then
     pass "channel count shown in the UI"
   else
     fail "channel count missing from the UI"
+    echo "     --- first 400 chars of the view hierarchy ---"
+    echo "$UI" | head -c 400
+    echo
   fi
 fi
 
@@ -154,13 +188,8 @@ if echo "$LOG" | grep -q "PLAYBACK_ERROR"; then
 fi
 
 step "Player screen shows the channel and the Cast control"
-timeout 90 adb shell uiautomator dump /sdcard/ui-player.xml > /dev/null 2>&1 || echo "     (uiautomator dump failed)"
-PUI=$(timeout 60 adb shell cat /sdcard/ui-player.xml 2>/dev/null || echo "")
-if echo "$PUI" | grep -qE "AR: |CI "; then
-  pass "player overlay shows the channel name"
-else
-  fail "player overlay missing the channel name"
-fi
+PUI=$(ui_dump /sdcard/ui-player.xml)
+assert_ui "$PUI" "AR: |CI " "player overlay shows the channel name" /sdcard/ui-player.xml
 
 step "Play a low-bitrate HLS stream and wait for a rendered frame"
 run_action playtest 40
