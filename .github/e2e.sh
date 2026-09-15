@@ -65,16 +65,18 @@ shot() { # <name>
   fi
 }
 
-landscape() { # lock the emulator to landscape so the TV layout can be captured
-  timeout 60 adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1 || true
-  timeout 60 adb shell settings put system user_rotation 1 > /dev/null 2>&1 || true
-  sleep 6
+tvshape() { # put the emulator into a landscape widescreen shape for the TV screenshot
+  # (settings put user_rotation does not rotate this headless AVD; resizing the
+  #  logical display does, and it is what the ten-foot layout is designed for)
+  timeout 60 adb shell wm size 2400x1080 > /dev/null 2>&1 || true
+  timeout 60 adb shell wm density 420 > /dev/null 2>&1 || true
+  sleep 8
 }
 
-portrait() {
-  timeout 60 adb shell settings put system user_rotation 0 > /dev/null 2>&1 || true
-  timeout 60 adb shell settings put system accelerometer_rotation 1 > /dev/null 2>&1 || true
-  sleep 4
+tvexit() {
+  timeout 60 adb shell wm size reset > /dev/null 2>&1 || true
+  timeout 60 adb shell wm density reset > /dev/null 2>&1 || true
+  sleep 6
 }
 
 step "Install debug APK"
@@ -137,8 +139,6 @@ else
   fi
 fi
 
-shot 1-playlists
-
 step "Play a real MPEG-TS channel"
 run_action playfirst 45
 assert_log "PLAYBACK_OPENING url=" "player opened the stream url"
@@ -166,7 +166,6 @@ step "Play a low-bitrate HLS stream and wait for a rendered frame"
 run_action playtest 40
 assert_log "PLAYBACK_FIRST_FRAME" "a frame was decoded and rendered on screen"
 if echo "$LOG" | grep -q "PLAYBACK_VIDEO_SIZE"; then pass "video size reported by the decoder"; fi
-shot 2-live-player
 
 step "HLS relay: start it for a live TS channel and validate the output"
 run_action relay 60
@@ -234,11 +233,6 @@ show_log "E2E_TV_"
 run_action tvmode 8
 assert_log "E2E_TV_MODE active=TV" "Android TV interface mode can be activated explicitly"
 show_log "E2E_TV_"
-# The ten-foot layout is a widescreen one: capture it locked to landscape.
-landscape
-run_action tvmode 10
-shot 3-tv-home
-portrait
 
 step "Navigation hints toggle"
 run_action navhints 8
@@ -275,6 +269,25 @@ else
   fail "system installer did not accept the install intent"
 fi
 show_log "UPDATE_INSTALL_"
+
+step "Store screenshots (generic demo playlist, no provider details)"
+# Uses a demo playlist served from this repo (generic channel names) so the
+# store listing never shows a real provider, credential, or channel name, and
+# dismisses the first-run TV dialog so the ten-foot layout is unobstructed.
+run_action demo 50
+assert_log "E2E_DEMO_SEEDED .*channels=[1-9][0-9]*" "demo playlist loaded for the screenshots"
+shot 1-playlists
+run_action openchannels 15
+shot 2-channels
+run_action playtest 45
+shot 3-live-player
+run_action opensettings 12
+shot 4-settings
+run_action tvdismiss 8
+tvshape
+run_action tvmode 14
+shot 5-tv-home
+tvexit
 
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)

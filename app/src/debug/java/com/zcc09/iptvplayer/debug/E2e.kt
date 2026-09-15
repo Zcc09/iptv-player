@@ -40,6 +40,11 @@ object E2e : E2eHandler {
     private const val M3U_ID = "ci-m3u"
     private const val XC_ID = "ci-xc"
 
+    /** Demo playlist for the store screenshots: generic names, served from this repo. */
+    private const val DEMO_ID = "demo-playlist"
+    private const val DEMO_PLAYLIST_URL =
+        "https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/demo-playlist.m3u"
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun handle(activity: Activity, action: String, extras: Map<String, String>) {
@@ -76,6 +81,53 @@ object E2e : E2eHandler {
                 val next = !Repo.showNavHints.value
                 Repo.setShowNavHints(next)
                 Logx.i("E2E_NAV_HINTS visible=${Repo.showNavHints.value}")
+            }
+            // ---------------------------------------------------------- store screenshots
+            // Replaces the CI playlists with a generic demo playlist (served from the
+            // repo, so the screenshots show no real provider or channel names) and
+            // clears the first-run TV dialog so the ten-foot layout is unobstructed.
+            "demo" -> scope.launch {
+                try {
+                    for (existing in Repo.playlists.value) Repo.delete(existing.id)
+                    val demo = Playlist(
+                        id = DEMO_ID,
+                        name = "My Playlist",
+                        type = PlaylistType.M3U,
+                        url = DEMO_PLAYLIST_URL,
+                        autoRefresh = true,
+                        refreshIntervalMinutes = 60
+                    )
+                    Repo.add(demo)
+                    val result = Repo.refresh(demo.id)
+                    Logx.i(
+                        "E2E_DEMO_SEEDED name=${demo.name} channels=${result.channels.size} " +
+                            "err=${result.error ?: "-"}"
+                    )
+                } catch (t: Throwable) {
+                    Logx.e("E2E_DEMO_FAILED", t)
+                }
+            }
+            "tvdismiss" -> {
+                Repo.setTvSetupDismissed(true)
+                Logx.i("E2E_TV_SETUP_DISMISSED")
+            }
+            "openchannels" -> {
+                val playlist = Repo.playlists.value.firstOrNull()
+                if (playlist == null) {
+                    Logx.w("E2E_OPEN_CHANNELS_NO_PLAYLIST")
+                } else {
+                    com.zcc09.iptvplayer.ui.Nav.push(
+                        com.zcc09.iptvplayer.ui.Screen.Channels(playlist.id)
+                    )
+                    Logx.i(
+                        "E2E_OPEN_CHANNELS playlist=${playlist.name} " +
+                            "channels=${Repo.channelsOf(playlist.id).size}"
+                    )
+                }
+            }
+            "opensettings" -> {
+                com.zcc09.iptvplayer.ui.Nav.push(com.zcc09.iptvplayer.ui.Screen.Settings)
+                Logx.i("E2E_OPEN_SETTINGS")
             }
             "updatecheck" -> scope.launch {
                 try {
