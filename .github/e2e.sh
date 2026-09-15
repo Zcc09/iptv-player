@@ -65,11 +65,11 @@ shot() { # <name>
   fi
 }
 
-tvshape() { # put the emulator into a landscape widescreen shape for the TV screenshot
-  # (settings put user_rotation does not rotate this headless AVD; resizing the
-  #  logical display does, and it is what the ten-foot layout is designed for)
-  timeout 60 adb shell wm size 2400x1080 > /dev/null 2>&1 || true
-  timeout 60 adb shell wm density 420 > /dev/null 2>&1 || true
+tvshape() { # put the emulator into a true 16:9 TV shape for the TV screenshot
+  # (settings put user_rotation does not rotate this headless AVD, and a 20:9
+  #  size squeezes the ten-foot layout's channel grid off the bottom)
+  timeout 60 adb shell wm size 1920x1080 > /dev/null 2>&1 || true
+  timeout 60 adb shell wm density 320 > /dev/null 2>&1 || true
   sleep 8
 }
 

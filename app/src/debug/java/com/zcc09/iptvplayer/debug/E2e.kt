@@ -42,6 +42,7 @@ object E2e : E2eHandler {
 
     /** Demo playlist for the store screenshots: generic names, served from this repo. */
     private const val DEMO_ID = "demo-playlist"
+    private const val DEMO_ID_2 = "demo-playlist-2"
     private const val DEMO_PLAYLIST_URL =
         "https://raw.githubusercontent.com/Zcc09/iptv-player/main/store/demo-playlist.m3u"
 
@@ -102,9 +103,21 @@ object E2e : E2eHandler {
                     )
                     Repo.add(demo)
                     val result = Repo.refresh(demo.id)
+                    // A second playlist so the home screen shows the multi-playlist
+                    // UI (one entry leaves three quarters of the screen empty).
+                    val second = Playlist(
+                        id = DEMO_ID_2,
+                        name = "Living Room TV",
+                        type = PlaylistType.M3U,
+                        url = DEMO_PLAYLIST_URL,
+                        autoRefresh = true,
+                        refreshIntervalMinutes = 180
+                    )
+                    Repo.add(second)
+                    val secondResult = Repo.refresh(second.id)
                     Logx.i(
                         "E2E_DEMO_SEEDED name=${demo.name} channels=${result.channels.size} " +
-                            "err=${result.error ?: "-"}"
+                            "err=${result.error ?: "-"} second=${secondResult.channels.size}"
                     )
                 } catch (t: Throwable) {
                     Logx.e("E2E_DEMO_FAILED", t)
