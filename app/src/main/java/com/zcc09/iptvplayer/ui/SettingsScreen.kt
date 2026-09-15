@@ -44,6 +44,7 @@ import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Net
 import com.zcc09.iptvplayer.core.PlayUpdate
 import com.zcc09.iptvplayer.core.RelayManager
+import com.zcc09.iptvplayer.core.RelayStatus
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.Updater
 import kotlinx.coroutines.launch
@@ -208,7 +209,7 @@ fun SettingsScreen() {
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "HLS relay: $relayStatus",
+                "HLS relay: ${RelayStatus.describe(relayStatus)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -108,26 +108,31 @@ python tools/make_play_assets.py
 ## Screenshots
 
 Captured automatically from the CI emulator (see `.github/e2e.sh`, "Store screenshots" step) and
-published as the `screenshots` artifact on every run. The step seeds a generic demo playlist first
-(`store/demo-playlist.m3u` + `store/logos/`) so no real provider, credential, or channel name ever
-appears in a public listing.
+published as the `screenshots` artifact on every run. They are checked in under
+`store/screenshots/` — use those files for the Play listing. The step seeds a generic demo
+playlist first (`store/demo-playlist.m3u` + `store/logos/`) so no real provider, credential, or
+channel name ever appears in a public listing.
 
 | File | Shot | Suggested listing caption |
 |---|---|---|
-| `1-playlists` | both playlists, M3U + auto-refresh state | "Your playlists — M3U links or Xtream accounts" |
+| `1-playlists` | both playlists with their M3U/auto-refresh state | "Your playlists — M3U links or Xtream accounts" |
 | `2-channels` | channel list with categories and logos | "Browse every channel, grouped and searchable" |
-| `3-live-player` | live playback, real frame | "Watch live with a full player" |
+| `3-live-player` | live playback, real decoded frame | "Watch live with a full player" |
 | `4-settings` | interface mode, casting, updates | "Tune it to your setup" |
 | `5-tv-home` | ten-foot TV interface (1920×1080) | "Built for the big screen" |
 
-Download them from the latest CI run:
+Refresh them from the latest CI run with:
 
 ```bash
-python tools/get_run_artifacts.py <run-id> screenshots   # helper in tools/ (see below)
+python tools/get_run_artifacts.py <run-id> screenshots ./store/screenshots
 ```
 
 If Android TV distribution is enabled, Play additionally requires TV screenshots (1920×1080 — shot
 5 works) and a 400×180 banner asset.
+
+All five are reviewed visually before use. That review is not ceremony: it has caught a renamed
+brand string still reading "IPTV PLAYER", an interface-mode chip squeezed into one letter per line,
+and an emulator ANR dialog baked into every frame.
 
 ## First upload walkthrough (Play Console)
 
