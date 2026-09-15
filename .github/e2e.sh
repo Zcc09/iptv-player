@@ -231,6 +231,12 @@ else
   fail "updater did not complete a download (no E2E_UPDATE_DOWNLOADED line)"
 fi
 show_log "E2E_UPDATE_DOWNLOAD"
+if echo "$LOG" | grep -qE "UPDATE_INSTALL_URI uri=content://"; then
+  pass "downloaded APK handed to the installer via a FileProvider uri"
+else
+  fail "installer hand-off failed (no UPDATE_INSTALL_URI content:// line)"
+fi
+show_log "UPDATE_INSTALL_"
 
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)

@@ -243,6 +243,10 @@ object Updater {
 
     /**
      * Prompts the Android OS package installer to install the downloaded APK.
+     *
+     * Logs the FileProvider URI and the resolved installer, so the end-to-end
+     * suite can prove the install hand-off works (a bad authority or
+     * file_paths.xml throws on getUriForFile, which is logged as an error).
      */
     fun installApk(context: Context, apkFile: File) {
         try {
@@ -251,12 +255,21 @@ object Updater {
                 "${context.packageName}.fileprovider",
                 apkFile
             )
+            Logx.i("UPDATE_INSTALL_URI uri=$uri bytes=${apkFile.length()}")
+
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            val handler = intent.resolveActivity(context.packageManager)
+            Logx.i("UPDATE_INSTALL_INTENT handler=${handler?.packageName ?: "none"}")
+            if (handler == null) {
+                Repo.postStatus("Update downloaded — no APK installer on this device")
+                return
+            }
             context.startActivity(intent)
+            Repo.postStatus("Opening the installer to update IPTV Player")
         } catch (t: Throwable) {
             Logx.e("Failed to start installer intent", t)
             Repo.postStatus("Could not open installer: ${t.message}")
