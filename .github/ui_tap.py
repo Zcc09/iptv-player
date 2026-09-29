@@ -11,6 +11,7 @@ Exits 0 when the element was tapped, 1 when it never appeared.
 """
 
 import argparse
+import html
 import re
 import subprocess
 import sys
@@ -36,25 +37,32 @@ def dump(timeout=60):
     return adb("shell", "cat", "/sdcard/ui_tap.xml")
 
 
-def candidates(xml, wanted):
+def candidates(xml, wanted, exact=False):
     """(score, text, x, y) for every node carrying the wanted text.
+
+    Attribute values are HTML-escaped in the dump (`Download &amp; Install`,
+    `&#128640; Update Available`), so unescape before comparing or an ampersand
+    makes a button invisible to the search.
 
     Exact matches score better than substrings, and buttons beat labels, because
     a dialog title like "Update Ready to Install" also contains "Install".
+    With exact=True only exact matches are considered at all - use it when a
+    substring hit would tap the wrong control (waiting for the ready-to-install
+    button must not settle for "Download & Install").
     """
     found = []
+    want = wanted.lower()
     for node in NODE_RE.findall(xml):
         m = TEXT_RE.search(node)
         if not m:
             continue
-        text = m.group(1).strip()
+        text = html.unescape(m.group(1)).strip()
         if not text:
             continue
         low = text.lower()
-        want = wanted.lower()
         if low == want:
             score = 0
-        elif want in low:
+        elif want in low and not exact:
             score = 2
         else:
             continue
@@ -72,10 +80,16 @@ def candidates(xml, wanted):
     return sorted(found)
 
 
+def visible_texts(xml):
+    return sorted({html.unescape(m.group(1)).strip() for m in TEXT_RE.finditer(xml)
+                   if m.group(1).strip()})
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--text", required=True, help="visible text to tap")
     ap.add_argument("--wait", type=int, default=30, help="seconds to keep looking")
+    ap.add_argument("--exact", action="store_true", help="only accept an exact text match")
     args = ap.parse_args()
 
     deadline = time.time() + args.wait
@@ -84,7 +98,7 @@ def main():
     while time.time() < deadline:
         attempt += 1
         last_xml = dump()
-        hits = candidates(last_xml, args.text)
+        hits = candidates(last_xml, args.text, exact=args.exact)
         if hits:
             score, text, x, y = hits[0]
             print(f'  found "{text}" at ({x},{y}) score={score} attempt={attempt}')
@@ -96,7 +110,7 @@ def main():
 
     print(f'  never found "{args.text}" in {args.wait}s ({attempt} dumps)', file=sys.stderr)
     print("  --- visible text on screen ---", file=sys.stderr)
-    for t in {m.group(1).strip() for m in TEXT_RE.finditer(last_xml) if m.group(1).strip()}:
+    for t in visible_texts(last_xml):
         print(f"  | {t}", file=sys.stderr)
     return 1
 

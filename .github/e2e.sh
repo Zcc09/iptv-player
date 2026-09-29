@@ -442,10 +442,19 @@ if [ -z "$OLD_URL" ] || [ -z "$NEW_TAG" ]; then
   fail "could not read the last two GitHub releases (rate limited?)"
 else
   timeout 240 curl -fsSL -o previous-release.apk "$OLD_URL"
-  # A freshly sideloaded app needs the install-apps allowance granted by hand.
-  timeout 60 adb shell appops set --uid "$PKG" REQUEST_INSTALL_PACKAGES allow > /dev/null 2>&1 || true
   timeout 120 adb uninstall "$PKG" > /dev/null 2>&1 || true
   timeout 300 adb install -r previous-release.apk > /dev/null 2>&1 || echo "     (adb install reported an error)"
+  # The install-apps allowance must be granted AFTER the install: uninstalling the
+  # app wipes its appops, so setting it before the uninstall/reinstall is lost and
+  # the system installer then refuses with "your phone currently isn't allowed to
+  # install unknown apps from this source".
+  timeout 60 adb shell appops set --uid "$PKG" REQUEST_INSTALL_PACKAGES allow > /dev/null 2>&1 || true
+  UPD_APPOP=$(timeout 60 adb shell appops get --uid "$PKG" REQUEST_INSTALL_PACKAGES 2>/dev/null | tr -d '\r')
+  echo "     appop REQUEST_INSTALL_PACKAGES: ${UPD_APPOP:-unknown}"
+  case "$UPD_APPOP" in
+    *allow*) pass "install-apps allowance granted to the sideloaded build" ;;
+    *) fail "could not grant REQUEST_INSTALL_PACKAGES (got '${UPD_APPOP:-nothing}')" ;;
+  esac
   BEFORE=$(timeout 60 adb shell dumpsys package "$PKG" 2>/dev/null | grep -m1 versionName | tr -d '\r' | awk -F= '{print $2}')
   if [ "$BEFORE" = "$OLD_VER" ]; then
     pass "sideloaded the previous published release ($OLD_TAG) from GitHub"
@@ -463,19 +472,28 @@ else
     timeout 90 adb logcat -d -v time 2>/dev/null | grep "IPTVPlayer" | tail -12 | sed 's/^/     | /' || true
   fi
 
-  if timeout 150 python3 .github/ui_tap.py --text "Download & Install" --wait 60; then
+  if timeout 150 python3 .github/ui_tap.py --text "Download & Install" --exact --wait 60; then
     pass "tapped Download & Install in the app's update dialog"
   else
     fail "the app's update dialog never offered Download & Install"
   fi
 
-  if timeout 90 adb logcat -d 2>/dev/null | grep -qE "Update downloaded to .+\([1-9][0-9]{5,} bytes\)"; then
+  # A ~14 MB download takes a while; poll instead of checking once.
+  UPD_DL=0
+  for _ in $(seq 1 60); do
+    if timeout 90 adb logcat -d 2>/dev/null | grep -qE "Update downloaded to .+\([1-9][0-9]{5,} bytes\)"; then
+      UPD_DL=1
+      break
+    fi
+    sleep 5
+  done
+  if [ "$UPD_DL" -eq 1 ]; then
     pass "the update APK finished downloading in the app"
   else
     fail "the app never logged a completed update download"
   fi
 
-  if timeout 400 python3 .github/ui_tap.py --text "Install" --wait 300; then
+  if timeout 400 python3 .github/ui_tap.py --text "Install" --exact --wait 240; then
     pass "tapped Install in the app's ready-to-install dialog"
   else
     fail "the ready-to-install dialog never appeared"
@@ -490,7 +508,10 @@ else
     sleep 3
   done
   echo "     installer focus: ${UPD_FOCUS:-unknown}"
-  if timeout 300 python3 .github/ui_tap.py --text "Install" --wait 120; then
+  # Replacing an installed package makes the installer say "Update" instead of
+  # "Install", depending on the platform version; accept either exact label.
+  if timeout 200 python3 .github/ui_tap.py --text "Install" --exact --wait 90 \
+    || timeout 200 python3 .github/ui_tap.py --text "Update" --exact --wait 60; then
     pass "confirmed the update in the system package installer"
   else
     fail "could not confirm the install in the system installer"
