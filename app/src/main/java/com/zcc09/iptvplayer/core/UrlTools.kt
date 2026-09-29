@@ -46,6 +46,25 @@ object UrlTools {
  */
 object XtreamUrls {
 
+    /**
+     * VOD URLs on an Xtream panel. `movie/<user>/<pass>/<stream_id>.<ext>` for a
+     * film, `series/<user>/<pass>/<episode_id>.<ext>` for one episode. Panels
+     * commonly 301-redirect these to the same path with a `?session_id=…` added,
+     * which the player follows.
+     */
+    fun movie(base: String, user: String, pass: String, streamId: Int, ext: String): String =
+        "$base/movie/${encode(user)}/${encode(pass)}/$streamId.${cleanExt(ext, "mp4")}"
+
+    fun episode(base: String, user: String, pass: String, episodeId: Int, ext: String): String =
+        "$base/series/${encode(user)}/${encode(pass)}/$episodeId.${cleanExt(ext, "mkv")}"
+
+    /** Panels are inconsistent: some send "mkv", some ".mkv". Never emit "5..mkv". */
+    private fun cleanExt(ext: String, fallback: String): String =
+        ext.trim().trimStart('.').ifBlank { fallback }
+
+    private fun encode(s: String): String =
+        java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+
     private val SUFFIXES = listOf(
         "/player_api.php", "/get.php", "/xmltv.php", "/panel_api.php",
         "/output/m3u", "/output/m3u_plus", "/output/m3u8", "/output/epg",

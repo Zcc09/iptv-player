@@ -41,13 +41,155 @@ class XtreamApi(
         val tvArchive: Boolean
     )
 
-    private fun apiUrl(action: String? = null): String {
+    private fun apiUrl(action: String? = null, extra: String? = null): String {
         val sb = StringBuilder(base)
         sb.append("/player_api.php?username=").append(enc(username))
         sb.append("&password=").append(enc(password))
         if (action != null) sb.append("&action=").append(enc(action))
+        if (extra != null) sb.append("&").append(extra)
         return sb.toString()
     }
+
+    // ------------------------------------------------------------------ VOD
+    // Catalogues get big: a real panel serves tens of thousands of films in one
+    // 38 MB response, so the app never lists "all films" - it always asks for one
+    // category at a time (`&category_id=`), which the panels honour.
+
+    data class VodStream(
+        val id: Int,
+        val name: String,
+        val icon: String,
+        val categoryId: String,
+        val containerExtension: String
+    )
+
+    data class SeriesEntry(
+        val id: Int,
+        val name: String,
+        val cover: String,
+        val categoryId: String
+    )
+
+    fun vodCategories(): List<Category> = categories("get_vod_categories")
+
+    fun seriesCategories(): List<Category> = categories("get_series_categories")
+
+    private fun categories(action: String): List<Category> {
+        val body = Http.getText(apiUrl(action), ua = userAgent)
+        val arr = JSONArrayIfArray(body)
+        val out = ArrayList<Category>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(
+                Category(
+                    id = o.optString("category_id"),
+                    name = o.optString("category_name", "Uncategorised")
+                )
+            )
+        }
+        return out
+    }
+
+    fun vodStreams(categoryId: String? = null): List<VodStream> {
+        val body = Http.getText(
+            apiUrl("get_vod_streams", categoryId?.takeIf { it.isNotBlank() }?.let { "category_id=" + enc(it) }),
+            ua = userAgent
+        )
+        val arr = JSONArrayIfArray(body)
+        val out = ArrayList<VodStream>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optInt("stream_id", -1)
+            if (id < 0) continue
+            out.add(
+                VodStream(
+                    id = id,
+                    name = o.optString("name", "Movie $id"),
+                    icon = o.optString("stream_icon", ""),
+                    categoryId = firstCategoryId(o),
+                    containerExtension = o.optString("container_extension", "mp4").ifBlank { "mp4" }
+                )
+            )
+        }
+        return out
+    }
+
+    fun series(categoryId: String? = null): List<SeriesEntry> {
+        val body = Http.getText(
+            apiUrl("get_series", categoryId?.takeIf { it.isNotBlank() }?.let { "category_id=" + enc(it) }),
+            ua = userAgent
+        )
+        val arr = JSONArrayIfArray(body)
+        val out = ArrayList<SeriesEntry>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optInt("series_id", -1)
+            if (id < 0) continue
+            out.add(
+                SeriesEntry(
+                    id = id,
+                    name = o.optString("name", "Series $id"),
+                    cover = o.optString("cover", ""),
+                    categoryId = firstCategoryId(o)
+                )
+            )
+        }
+        return out
+    }
+
+    /**
+     * Episodes of one series, flattened across seasons.
+     *
+     * The payload is `{ seasons: [...], info: {...}, episodes: { "1": [ {...} ] } }`
+     * and episode ids are what the playback URL needs.
+     */
+    fun seriesInfo(seriesId: Int): List<Episode> {
+        val body = Http.getText(
+            apiUrl("get_series_info", "series_id=$seriesId"),
+            ua = userAgent
+        )
+        return parseSeriesInfo(body)
+    }
+
+    /** Kept separate from the network call so the shape can be unit tested. */
+    internal fun parseSeriesInfo(body: String): List<Episode> {
+        val root = runCatching { JSONObject(body.trim()) }.getOrNull() ?: return emptyList()
+        val eps = root.optJSONObject("episodes") ?: return emptyList()
+        val out = ArrayList<Episode>()
+        for (seasonKey in eps.keys()) {
+            val season = seasonKey.toIntOrNull() ?: 0
+            val arr = eps.optJSONArray(seasonKey) ?: continue
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id").toIntOrNull() ?: o.optInt("id", -1)
+                if (id < 0) continue
+                out.add(
+                    Episode(
+                        id = id,
+                        season = o.optString("season").toIntOrNull() ?: season,
+                        number = o.optString("episode_num").toIntOrNull() ?: (i + 1),
+                        title = o.optString("title", "Episode ${i + 1}"),
+                        containerExtension = o.optString("container_extension", "mkv").ifBlank { "mkv" }
+                    )
+                )
+            }
+        }
+        return out.sortedWith(compareBy({ it.season }, { it.number }))
+    }
+
+    private fun firstCategoryId(o: JSONObject): String {
+        val catIds = o.optJSONArray("category_ids")
+        return when {
+            catIds != null && catIds.length() > 0 -> catIds.optString(0)
+            else -> o.optString("category_id", "")
+        }
+    }
+
+    fun movieUrl(item: VodItem): String =
+        XtreamUrls.movie(base, username, password, item.id, item.containerExtension)
+
+    fun episodeUrl(episode: Episode): String =
+        XtreamUrls.episode(base, username, password, episode.id, episode.containerExtension)
 
     fun auth(): Auth {
         val body = Http.getText(apiUrl(), ua = userAgent)

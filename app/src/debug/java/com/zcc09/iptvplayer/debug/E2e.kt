@@ -4,12 +4,15 @@ import android.app.Activity
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.E2eHandler
+import com.zcc09.iptvplayer.core.Episode
 import com.zcc09.iptvplayer.core.Http
 import com.zcc09.iptvplayer.core.Logx
+import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Playlist
 import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
+import com.zcc09.iptvplayer.core.VodItem
 import com.zcc09.iptvplayer.core.XtreamApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -164,6 +167,11 @@ object E2e : E2eHandler {
                 com.zcc09.iptvplayer.ui.Nav.push(com.zcc09.iptvplayer.ui.Screen.Settings)
                 Logx.i("E2E_OPEN_SETTINGS")
             }
+            // --------------------------------------------------------------- VOD
+            "vodcats" -> scope.launch { vodProbeCategories() }
+            "vodmovies" -> scope.launch { vodProbeMovies() }
+            "vodshows" -> scope.launch { vodProbeShows() }
+            "playvod" -> scope.launch { vodPlayFirstMovie() }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -229,6 +237,128 @@ object E2e : E2eHandler {
             }
             else -> Logx.w("E2E_UNKNOWN_ACTION $action")
         }
+    }
+
+    // ------------------------------------------------------------------- VOD
+    // Films/series are fetched one category at a time (a panel can serve tens of
+    // thousands of titles), so each probe walks categories until one has items.
+
+    private fun vodPlaylist(): Playlist? =
+        Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
+
+    private suspend fun vodCategoryWithItems(playlistId: String, kind: MediaKind): Pair<String, List<VodItem>>? {
+        val cats = Repo.vodCategoriesFor(playlistId, kind)
+            .ifEmpty { Repo.loadVodCategories(playlistId, kind) }
+        var tried = 0
+        for (cat in cats) {
+            if (tried >= 5) break
+            tried++
+            val items = Repo.loadVodItems(playlistId, kind, cat.id)
+            if (items.isNotEmpty()) return cat.name to items
+        }
+        Logx.w("E2E_VOD_NO_ITEMS kind=$kind categories=${cats.size} tried=$tried")
+        return null
+    }
+
+    private fun vodMovieChannel(item: VodItem, category: String): Channel? {
+        val playlist = vodPlaylist() ?: return null
+        val url = Repo.movieUrl(playlist.id, item) ?: return null
+        return Channel(
+            id = "movie:${playlist.id}:${item.id}",
+            playlistId = playlist.id,
+            name = item.name,
+            group = category,
+            logo = item.icon,
+            url = url,
+            streamId = item.id
+        )
+    }
+
+    private suspend fun vodProbeCategories() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_VOD_NO_XTREAM_PLAYLIST")
+            return
+        }
+        val movies = Repo.loadVodCategories(playlist.id, MediaKind.MOVIE)
+        val shows = Repo.loadVodCategories(playlist.id, MediaKind.SERIES)
+        Logx.i(
+            "E2E_VOD_CATEGORIES movies=${movies.size} series=${shows.size} " +
+                "movieFirst=${movies.firstOrNull()?.name ?: "-"} " +
+                "showFirst=${shows.firstOrNull()?.name ?: "-"}"
+        )
+        movies.take(3).forEach { Logx.i("E2E_VOD_CATEGORY movie id=${it.id} name=${it.name}") }
+        shows.take(3).forEach { Logx.i("E2E_VOD_CATEGORY series id=${it.id} name=${it.name}") }
+    }
+
+    private suspend fun vodProbeMovies() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_VOD_NO_XTREAM_PLAYLIST")
+            return
+        }
+        val hit = vodCategoryWithItems(playlist.id, MediaKind.MOVIE)
+        if (hit == null) {
+            Logx.w("E2E_VOD_MOVIES_EMPTY")
+            return
+        }
+        val (category, items) = hit
+        Logx.i("E2E_VOD_MOVIES category=$category count=${items.size}")
+        items.take(3).forEach {
+            Logx.i("E2E_VOD_MOVIE id=${it.id} name=${it.name} ext=${it.containerExtension}")
+        }
+        items.firstOrNull()?.let { first ->
+            val url = Repo.movieUrl(playlist.id, first)
+            Logx.i("E2E_VOD_MOVIE_URL ${url ?: "-"}")
+        }
+    }
+
+    private suspend fun vodProbeShows() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_VOD_NO_XTREAM_PLAYLIST")
+            return
+        }
+        val hit = vodCategoryWithItems(playlist.id, MediaKind.SERIES)
+        if (hit == null) {
+            Logx.w("E2E_VOD_SHOWS_EMPTY")
+            return
+        }
+        val (category, items) = hit
+        Logx.i("E2E_VOD_SHOWS category=$category count=${items.size}")
+        items.take(3).forEach { Logx.i("E2E_VOD_SHOW id=${it.id} name=${it.name}") }
+
+        val first = items.firstOrNull() ?: return
+        val episodes: List<Episode> = Repo.loadEpisodes(playlist.id, first.id)
+        Logx.i(
+            "E2E_VOD_EPISODES series=${first.name} count=${episodes.size} " +
+                "seasons=${episodes.map { it.season }.distinct().size} " +
+                "first=S${episodes.firstOrNull()?.season}E${episodes.firstOrNull()?.number}"
+        )
+        episodes.firstOrNull()?.let {
+            Logx.i("E2E_VOD_EPISODE_URL ${Repo.episodeUrl(playlist.id, it) ?: "-"}")
+        }
+    }
+
+    private suspend fun vodPlayFirstMovie() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_VOD_NO_XTREAM_PLAYLIST")
+            return
+        }
+        val hit = vodCategoryWithItems(playlist.id, MediaKind.MOVIE) ?: run {
+            Logx.w("E2E_VOD_PLAY_NO_MOVIE")
+            return
+        }
+        val (category, items) = hit
+        val item = items.firstOrNull() ?: return
+        val channel = vodMovieChannel(item, category)
+        if (channel == null) {
+            Logx.w("E2E_VOD_PLAY_NO_URL ${item.name}")
+            return
+        }
+        Logx.i("E2E_VOD_PLAY category=$category name=${item.name} url=${channel.url}")
+        Repo.requestPlay(channel)
     }
 
     private suspend fun seed() {

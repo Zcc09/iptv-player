@@ -65,6 +65,50 @@ data class ParsedM3u(
     val userAgent: String? = null
 )
 
+/** Which catalogue an entry came from. */
+enum class MediaKind { LIVE, MOVIE, SERIES }
+
+/**
+ * A VOD category. Panels expose hundreds of these (the test server has 443 film
+ * and 381 series categories), so the UI lists them lazily rather than all at once.
+ */
+@Serializable
+data class VodCategory(
+    val id: String,
+    val name: String,
+    val kind: MediaKind
+)
+
+/**
+ * One film or series from a VOD category.
+ *
+ * Catalogue sizes make "load everything" impossible - the test server serves
+ * 72k films in a 38 MB response - so items are always fetched per category.
+ * A series carries [containerExtension] = "" because its extension belongs to
+ * each episode, which is fetched separately via the series info call.
+ */
+@Serializable
+data class VodItem(
+    val id: Int,
+    val playlistId: String,
+    val name: String,
+    val categoryId: String = "",
+    val icon: String = "",
+    val containerExtension: String = "",
+    val kind: MediaKind = MediaKind.MOVIE
+)
+
+/** One episode inside a series. */
+@Serializable
+data class Episode(
+    val id: Int,
+    val season: Int,
+    val number: Int,
+    val title: String,
+    val containerExtension: String = "mkv"
+)
+
+
 /** Result of a playlist refresh. */
 data class RefreshResult(
     val channels: List<Channel>,

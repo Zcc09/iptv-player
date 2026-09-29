@@ -335,6 +335,150 @@ object Repo {
         scope.launch { refresh(playlistId) }
     }
 
+    // ------------------------------------------------------------------ VOD
+    // Films and series are never cached wholesale (the test panel alone serves
+    // 72k films in a 38 MB response); categories are fetched once per playlist,
+    // then one category's items are fetched on demand and kept in memory.
+
+    private val _vodCategories = MutableStateFlow<Map<String, List<VodCategory>>>(emptyMap())
+    val vodCategories: StateFlow<Map<String, List<VodCategory>>> = _vodCategories.asStateFlow()
+
+    private val _vodItems = MutableStateFlow<Map<String, List<VodItem>>>(emptyMap())
+    val vodItems: StateFlow<Map<String, List<VodItem>>> = _vodItems.asStateFlow()
+
+    private val _vodBusy = MutableStateFlow<Set<String>>(emptySet())
+    val vodBusy: StateFlow<Set<String>> = _vodBusy.asStateFlow()
+
+    private val _vodErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+    val vodErrors: StateFlow<Map<String, String>> = _vodErrors.asStateFlow()
+
+    private val episodesCache = java.util.concurrent.ConcurrentHashMap<Int, List<Episode>>()
+
+    private fun catKey(playlistId: String, kind: MediaKind) = "$playlistId|${kind.name}"
+
+    private fun itemKey(playlistId: String, kind: MediaKind, categoryId: String) =
+        "$playlistId|${kind.name}|$categoryId"
+
+    fun vodCategoriesFor(playlistId: String, kind: MediaKind): List<VodCategory> =
+        _vodCategories.value[catKey(playlistId, kind)].orEmpty()
+
+    fun vodItemsFor(playlistId: String, kind: MediaKind, categoryId: String): List<VodItem> =
+        _vodItems.value[itemKey(playlistId, kind, categoryId)].orEmpty()
+
+    fun vodStatusText(key: String): String? = _vodErrors.value[key]
+
+    private fun xtreamFor(p: Playlist) = XtreamApi(p.url, p.username, p.password, userAgent)
+
+    /** True when this playlist can have VOD at all (only Xtream accounts do). */
+    fun supportsVod(playlistId: String): Boolean =
+        playlist(playlistId)?.type == PlaylistType.XTREAM
+
+    suspend fun loadVodCategories(playlistId: String, kind: MediaKind): List<VodCategory> {
+        val p = playlist(playlistId) ?: return emptyList()
+        if (p.type != PlaylistType.XTREAM) return emptyList()
+        val key = catKey(playlistId, kind)
+        _vodBusy.value = _vodBusy.value + key
+        return try {
+            val api = xtreamFor(p)
+            val cats = withContext(Dispatchers.IO) {
+                when (kind) {
+                    MediaKind.MOVIE -> api.vodCategories()
+                    MediaKind.SERIES -> api.seriesCategories()
+                    MediaKind.LIVE -> api.liveCategories()
+                }
+            }.map { VodCategory(id = it.id, name = it.name, kind = kind) }
+            _vodCategories.value = _vodCategories.value + (key to cats)
+            _vodErrors.value = _vodErrors.value - key
+            Logx.i("VOD_CATEGORIES kind=$kind playlist=$playlistId count=${cats.size}")
+            cats
+        } catch (t: Throwable) {
+            Logx.e("VOD categories failed ($kind, $playlistId)", t)
+            _vodErrors.value = _vodErrors.value + (key to (t.message ?: "could not load categories"))
+            emptyList()
+        } finally {
+            _vodBusy.value = _vodBusy.value - key
+        }
+    }
+
+    suspend fun loadVodItems(
+        playlistId: String,
+        kind: MediaKind,
+        categoryId: String
+    ): List<VodItem> {
+        val p = playlist(playlistId) ?: return emptyList()
+        if (p.type != PlaylistType.XTREAM || categoryId.isBlank()) return emptyList()
+        val key = itemKey(playlistId, kind, categoryId)
+        _vodBusy.value = _vodBusy.value + key
+        return try {
+            val api = xtreamFor(p)
+            val items = withContext(Dispatchers.IO) {
+                when (kind) {
+                    MediaKind.MOVIE -> api.vodStreams(categoryId).map {
+                        VodItem(
+                            id = it.id, playlistId = playlistId, name = it.name,
+                            categoryId = it.categoryId, icon = it.icon,
+                            containerExtension = it.containerExtension, kind = MediaKind.MOVIE
+                        )
+                    }
+
+                    MediaKind.SERIES -> api.series(categoryId).map {
+                        VodItem(
+                            id = it.id, playlistId = playlistId, name = it.name,
+                            categoryId = it.categoryId, icon = it.cover,
+                            containerExtension = "", kind = MediaKind.SERIES
+                        )
+                    }
+
+                    MediaKind.LIVE -> emptyList()
+                }
+            }
+            _vodItems.value = _vodItems.value + (key to items)
+            _vodErrors.value = _vodErrors.value - key
+            Logx.i("VOD_ITEMS kind=$kind category=$categoryId count=${items.size}")
+            items
+        } catch (t: Throwable) {
+            Logx.e("VOD items failed ($kind, $playlistId, $categoryId)", t)
+            _vodErrors.value = _vodErrors.value + (key to (t.message ?: "could not load items"))
+            emptyList()
+        } finally {
+            _vodBusy.value = _vodBusy.value - key
+        }
+    }
+
+    suspend fun loadEpisodes(playlistId: String, seriesId: Int): List<Episode> {
+        val p = playlist(playlistId) ?: return emptyList()
+        if (p.type != PlaylistType.XTREAM) return emptyList()
+        episodesCache[seriesId]?.let { return it }
+        return try {
+            val eps = withContext(Dispatchers.IO) { xtreamFor(p).seriesInfo(seriesId) }
+            episodesCache[seriesId] = eps
+            Logx.i("VOD_EPISODES series=$seriesId count=${eps.size}")
+            eps
+        } catch (t: Throwable) {
+            Logx.e("Series info failed for $seriesId", t)
+            emptyList()
+        }
+    }
+
+    /** Builds the playable URL for a film. */
+    fun movieUrl(playlistId: String, item: VodItem): String? =
+        playlist(playlistId)?.takeIf { it.type == PlaylistType.XTREAM }
+            ?.let { xtreamFor(it).movieUrl(item) }
+
+    /** Builds the playable URL for one episode. */
+    fun episodeUrl(playlistId: String, episode: Episode): String? =
+        playlist(playlistId)?.takeIf { it.type == PlaylistType.XTREAM }
+            ?.let { xtreamFor(it).episodeUrl(episode) }
+
+    /** Fire-and-forget loaders for the UI. */
+    fun loadVodCategoriesAsync(playlistId: String, kind: MediaKind) {
+        scope.launch { loadVodCategories(playlistId, kind) }
+    }
+
+    fun loadVodItemsAsync(playlistId: String, kind: MediaKind, categoryId: String) {
+        scope.launch { loadVodItems(playlistId, kind, categoryId) }
+    }
+
     fun refreshAllAsync() {
         scope.launch { refreshAll() }
     }

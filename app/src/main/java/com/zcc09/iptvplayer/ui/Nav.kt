@@ -8,6 +8,8 @@ sealed class Screen {
     data class EditPlaylist(val playlistId: String?) : Screen()
     data class Channels(val playlistId: String) : Screen()
     data class Player(val channel: Channel, val urlOverride: String? = null) : Screen()
+    /** Seasons/episodes of one series. */
+    data class Series(val playlistId: String, val seriesId: Int, val title: String) : Screen()
     data object Settings : Screen()
 }
 

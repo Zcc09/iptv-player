@@ -17,6 +17,7 @@ that flavor does not even declare the install permission).
 |---|---|
 | **Sources** | M3U / M3U-Plus playlist URL, or Xtream Codes API (`player_api.php`) with username + password |
 | **Channel list** | Group/category filter, search, favourites, channel logos, per-playlist cache |
+| **Live / Movies / Shows** | Xtream accounts get three tabs: live channels, the film catalogue and the series catalogue. Films and series are browsed **per category** (a real panel returns 72k films in one 38 MB response, so "everything" is never requested), with one search box filtering both the category strip and the list. A series opens its seasons and episodes; tapping an episode plays it |
 | **Player** | Media3/ExoPlayer: MPEG-TS, HLS, fMP4, MKV, DASH; fit/crop/stretch aspect modes, previous/next channel, retry on error, picture-in-picture |
 | **Casting** | Chromecast / Google TV / Android TV via the Cast SDK (default media receiver) **plus a built-in HLS relay** so raw MPEG-TS channels can actually be cast |
 | **Auto refresh** | WorkManager job per playlist (15 min … 24 h, or off) + on-launch refresh when the interval has elapsed + manual "refresh all" |

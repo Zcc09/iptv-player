@@ -33,6 +33,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Repo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +59,17 @@ fun ChannelsScreen(playlistId: String) {
     val channelsMap by Repo.channels.collectAsState()
     val favorites by Repo.favorites.collectAsState()
     val busy by Repo.busy.collectAsState()
+
+    // Xtream accounts expose films and series; a plain M3U link has no VOD API.
+    val vodAvailable = remember(playlistId) { Repo.supportsVod(playlistId) }
+    var tab by remember(playlistId) { mutableStateOf(MediaKind.LIVE) }
+
+    // Films and series live in their own screen tree; the live list below is only
+    // rendered for the Live tab.
+    if (vodAvailable && tab != MediaKind.LIVE) {
+        VodScreen(playlistId, tab) { tab = it }
+        return
+    }
 
     val all = channelsMap[playlistId].orEmpty()
     var query by remember { mutableStateOf("") }
@@ -107,6 +121,9 @@ fun ChannelsScreen(playlistId: String) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (vodAvailable) {
+                VodTabRow(selected = tab, onSelect = { tab = it })
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

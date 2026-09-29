@@ -159,6 +159,46 @@ assert_log "XC_API_OK .*auth=true" "Xtream login accepted"
 assert_log "XC_API_OK .*streams=[1-9][0-9]*" "Xtream live streams listed"
 show_log "XC_"
 
+step "VOD catalogue: movie + series categories, items, episode lists"
+# Panels serve enormous catalogues (the test panel alone returns 72k films in a
+# single 38 MB response), so the app must always fetch one category at a time.
+run_action vodcats 45
+if echo "$LOG" | grep -qE "E2E_VOD_CATEGORIES movies=[1-9][0-9]* series=[1-9][0-9]*"; then
+  pass "movie and series categories listed"
+else
+  fail "VOD categories missing (no E2E_VOD_CATEGORIES line with both counts)"
+fi
+show_log "E2E_VOD_CATEGOR"
+
+run_action vodmovies 90
+if echo "$LOG" | grep -qE "E2E_VOD_MOVIES category=.+ count=[1-9][0-9]*"; then
+  pass "movies listed for a category"
+else
+  fail "no movies listed for any category (no E2E_VOD_MOVIES line)"
+fi
+assert_log "E2E_VOD_MOVIE_URL https?://.+/movie/.+\.[a-z0-9]+" "movie playback url built"
+show_log "E2E_VOD_MOVIE"
+
+run_action vodshows 120
+if echo "$LOG" | grep -qE "E2E_VOD_SHOWS category=.+ count=[1-9][0-9]*"; then
+  pass "series listed for a category"
+else
+  fail "no series listed for any category (no E2E_VOD_SHOWS line)"
+fi
+if echo "$LOG" | grep -qE "E2E_VOD_EPISODES series=.+ count=[1-9][0-9]*"; then
+  pass "episodes returned for the first series"
+else
+  fail "series info returned no episodes (no E2E_VOD_EPISODES line)"
+fi
+assert_log "E2E_VOD_EPISODE_URL https?://.+/series/.+\.[a-z0-9]+" "episode playback url built"
+show_log "E2E_VOD_(SHOW|EPISODE)"
+
+step "VOD playback (first film of the first non-empty category)"
+run_action playvod 90
+assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback requested"
+assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the film actually renders video"
+show_log "E2E_VOD_PLAY|PLAYBACK_"
+
 step "Refresh all playlists (auto-refresh code path)"
 run_action refresh 55
 assert_log "REFRESH_ALL_DONE channels=[1-9][0-9]*" "refresh-all re-downloaded channels"
@@ -348,6 +388,118 @@ else
 fi
 ANRS=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "ANR in $PKG" || true)
 if [ "${ANRS:-0}" -eq 0 ]; then pass "no ANRs"; else fail "$ANRS ANR(s)"; fi
+
+step "In-app update, the way a person does it: sideload the previous release and let it update itself"
+# Everything above drove the updater through debug hooks. This step uses no hooks:
+# it installs the last published release, then taps the real dialogs and the
+# system package installer, and finally reads back the installed version. A broken
+# update path fails here even when the API-level checks all pass.
+UPD_RELEASES=$(timeout 60 curl -fsSL \
+  "https://api.github.com/repos/Zcc09/iptv-player/releases?per_page=5" || echo "[]")
+UPD_INFO=$(printf '%s' "$UPD_RELEASES" | python3 -c '
+import json, sys
+try:
+    rs = json.load(sys.stdin)
+except Exception:
+    rs = []
+rs = [r for r in rs if not r.get("draft") and not r.get("prerelease")]
+def apk(r):
+    for a in r.get("assets", []):
+        if a.get("name") == "iptv-player-release.apk":
+            return a.get("browser_download_url", "")
+    return ""
+for r in rs[:2]:
+    print(r.get("tag_name", ""), r.get("tag_name", "").lstrip("v"), apk(r))
+')
+NEW_TAG=$(printf '%s\n' "$UPD_INFO" | sed -n 1p | cut -d' ' -f1)
+NEW_VER=$(printf '%s\n' "$UPD_INFO" | sed -n 1p | cut -d' ' -f2)
+OLD_TAG=$(printf '%s\n' "$UPD_INFO" | sed -n 2p | cut -d' ' -f1)
+OLD_VER=$(printf '%s\n' "$UPD_INFO" | sed -n 2p | cut -d' ' -f2)
+OLD_URL=$(printf '%s\n' "$UPD_INFO" | sed -n 2p | cut -d' ' -f3)
+echo "     previous release: ${OLD_TAG:-?} (${OLD_VER:-?})   newest release: ${NEW_TAG:-?} (${NEW_VER:-?})"
+
+if [ -z "$OLD_URL" ] || [ -z "$NEW_TAG" ]; then
+  fail "could not read the last two GitHub releases (rate limited?)"
+else
+  timeout 240 curl -fsSL -o previous-release.apk "$OLD_URL"
+  # A freshly sideloaded app needs the install-apps allowance granted by hand.
+  timeout 60 adb shell appops set --uid "$PKG" REQUEST_INSTALL_PACKAGES allow > /dev/null 2>&1 || true
+  timeout 120 adb uninstall "$PKG" > /dev/null 2>&1 || true
+  timeout 300 adb install -r previous-release.apk > /dev/null 2>&1 || echo "     (adb install reported an error)"
+  BEFORE=$(timeout 60 adb shell dumpsys package "$PKG" 2>/dev/null | grep -m1 versionName | tr -d '\r' | awk -F= '{print $2}')
+  if [ "$BEFORE" = "$OLD_VER" ]; then
+    pass "sideloaded the previous published release ($OLD_TAG) from GitHub"
+  else
+    fail "installed $OLD_TAG but the device reports version '${BEFORE:-nothing}'"
+  fi
+
+  timeout 30 adb logcat -c > /dev/null 2>&1 || true
+  timeout 90 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || true
+  sleep 25
+  if timeout 90 adb logcat -d -v time 2>/dev/null | grep -q "Update found: $NEW_TAG"; then
+    pass "the app found $NEW_TAG on GitHub by itself at startup"
+  else
+    fail "the app never reported 'Update found: $NEW_TAG'"
+    timeout 90 adb logcat -d -v time 2>/dev/null | grep "IPTVPlayer" | tail -12 | sed 's/^/     | /' || true
+  fi
+
+  if timeout 150 python3 .github/ui_tap.py --text "Download & Install" --wait 60; then
+    pass "tapped Download & Install in the app's update dialog"
+  else
+    fail "the app's update dialog never offered Download & Install"
+  fi
+
+  if timeout 90 adb logcat -d 2>/dev/null | grep -qE "Update downloaded to .+\([1-9][0-9]{5,} bytes\)"; then
+    pass "the update APK finished downloading in the app"
+  else
+    fail "the app never logged a completed update download"
+  fi
+
+  if timeout 400 python3 .github/ui_tap.py --text "Install" --wait 300; then
+    pass "tapped Install in the app's ready-to-install dialog"
+  else
+    fail "the ready-to-install dialog never appeared"
+  fi
+
+  # Wait until the system installer owns the screen before tapping, otherwise the
+  # tap lands on the app's own dialog button again.
+  UPD_FOCUS=""
+  for _ in $(seq 1 30); do
+    UPD_FOCUS=$(timeout 60 adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | tr -d '\r')
+    case "$UPD_FOCUS" in *packageinstaller*|*permissioncontroller*|*packageInstaller*) break ;; esac
+    sleep 3
+  done
+  echo "     installer focus: ${UPD_FOCUS:-unknown}"
+  if timeout 300 python3 .github/ui_tap.py --text "Install" --wait 120; then
+    pass "confirmed the update in the system package installer"
+  else
+    fail "could not confirm the install in the system installer"
+  fi
+
+  sleep 30
+  AFTER=$(timeout 60 adb shell dumpsys package "$PKG" 2>/dev/null | grep -m1 versionName | tr -d '\r' | awk -F= '{print $2}')
+  if [ "$AFTER" = "$NEW_VER" ]; then
+    pass "the app updated itself from $OLD_VER to $NEW_VER ($NEW_TAG)"
+  else
+    fail "after the update the device reports '${AFTER:-nothing}', expected $NEW_VER"
+  fi
+
+  timeout 90 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || true
+  sleep 12
+  UPD_UI=$(ui_dump /sdcard/after-update.xml)
+  if echo "$UPD_UI" | grep -qE "Internet TV Player|Playlist"; then
+    pass "the updated build starts and paints its own screens"
+  else
+    fail "the updated build did not reach its main screen"
+    echo "$UPD_UI" | head -c 600 | sed 's/^/     | /'
+  fi
+  UPD_CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
+  if [ "${UPD_CRASHES:-0}" -eq 0 ]; then
+    pass "no crashes during the update run"
+  else
+    fail "$UPD_CRASHES fatal exception(s) during the update run"
+  fi
+fi
 
 echo
 if [ "$FAILURES" -eq 0 ]; then
