@@ -93,10 +93,14 @@ private fun VodTabItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (MediaKind) -> Unit) {
+    // Same title as the live view (the playlist), so the two surfaces read alike;
+    // the tab row already says which catalogue is open. No refresh action here
+    // either - unlike a live channel list, a film category does not go stale.
+    val playlist = remember(playlistId) { Repo.playlist(playlistId) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (kind == MediaKind.MOVIE) "Movies" else "Shows") },
+                title = { Text(playlist?.name ?: if (kind == MediaKind.MOVIE) "Movies" else "Shows") },
                 navigationIcon = {
                     IconButton(onClick = { Nav.pop() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")

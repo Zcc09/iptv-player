@@ -163,6 +163,23 @@ object E2e : E2eHandler {
                     )
                 }
             }
+            // The Movies/Shows tabs only exist for Xtream accounts, so the tab UI is
+            // driven through the Xtream playlist rather than whichever is first.
+            "openxc" -> {
+                val playlist = Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
+                if (playlist == null) {
+                    Logx.w("E2E_OPEN_XC_NO_PLAYLIST")
+                } else {
+                    com.zcc09.iptvplayer.ui.Nav.push(
+                        com.zcc09.iptvplayer.ui.Screen.Channels(playlist.id)
+                    )
+                    Logx.i(
+                        "E2E_OPEN_XC playlist=${playlist.name} " +
+                            "channels=${Repo.channelsOf(playlist.id).size} " +
+                            "vod=${Repo.supportsVod(playlist.id)}"
+                    )
+                }
+            }
             "opensettings" -> {
                 com.zcc09.iptvplayer.ui.Nav.push(com.zcc09.iptvplayer.ui.Screen.Settings)
                 Logx.i("E2E_OPEN_SETTINGS")

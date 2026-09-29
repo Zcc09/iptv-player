@@ -199,6 +199,26 @@ assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback reque
 assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the film actually renders video"
 show_log "E2E_VOD_PLAY|PLAYBACK_"
 
+step "VOD UI: the Movies tab, driven the way a viewer taps it"
+# The probes above call the repository directly; this taps the real tab in the UI.
+# Only the shape of the count line is asserted, never the catalogue's own titles,
+# because CI logs and artifacts on a public repo are readable by anyone.
+run_action openxc 20
+assert_log "E2E_OPEN_XC .*vod=true" "an Xtream playlist offers the VOD tabs"
+if timeout 150 python3 .github/ui_tap.py --text "Movies" --wait 60; then
+  pass "tapped the Movies tab"
+else
+  fail "the Movies tab was not on screen for an Xtream playlist"
+fi
+sleep 12
+VOD_UI=$(ui_dump /sdcard/vod-ui.xml)
+if echo "$VOD_UI" | grep -qE "[0-9]+ of [0-9]+ in "; then
+  pass "the film list rendered with its category count line"
+else
+  fail "the Movies tab did not render a list (no 'N of N in <category>' line)"
+  echo "     text-bearing nodes on screen: $(echo "$VOD_UI" | grep -o 'text="[^"]*"' | wc -l)"
+fi
+
 step "Refresh all playlists (auto-refresh code path)"
 run_action refresh 55
 assert_log "REFRESH_ALL_DONE channels=[1-9][0-9]*" "refresh-all re-downloaded channels"
