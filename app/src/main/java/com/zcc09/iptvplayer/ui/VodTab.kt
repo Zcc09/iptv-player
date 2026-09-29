@@ -288,10 +288,15 @@ private fun VodRow(item: VodItem, onOpen: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(item.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
-            val sub = when {
-                item.kind == MediaKind.SERIES -> "Series"
-                item.containerExtension.isNotBlank() -> item.containerExtension.uppercase()
-                else -> ""
+            // A viewer reads "2014 · 6.5★"; the container only shows when the panel
+            // gave nothing better (a series has none - its episodes do).
+            val sub = when (item.kind) {
+                MediaKind.SERIES -> "Series"
+                else -> listOfNotNull(
+                    item.year.takeIf { it.isNotBlank() },
+                    item.rating.takeIf { it.isNotBlank() }?.let { "$it★" },
+                    item.containerExtension.takeIf { it.isNotBlank() }?.uppercase()
+                ).joinToString(" · ")
             }
             if (sub.isNotBlank()) {
                 Text(

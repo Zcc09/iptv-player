@@ -189,6 +189,7 @@ object E2e : E2eHandler {
             "vodmovies" -> scope.launch { vodProbeMovies() }
             "vodshows" -> scope.launch { vodProbeShows() }
             "playvod" -> scope.launch { vodPlayFirstMovie() }
+            "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -375,6 +376,45 @@ object E2e : E2eHandler {
             return
         }
         Logx.i("E2E_VOD_PLAY category=$category name=${item.name} url=${channel.url}")
+        Repo.requestPlay(channel)
+    }
+
+    /** Films and episodes are separate URL paths, so both must be played for real. */
+    private suspend fun vodPlayFirstEpisode() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_VOD_NO_XTREAM_PLAYLIST")
+            return
+        }
+        val hit = vodCategoryWithItems(playlist.id, MediaKind.SERIES) ?: run {
+            Logx.w("E2E_VOD_PLAY_NO_SERIES")
+            return
+        }
+        val (category, items) = hit
+        val series = items.firstOrNull() ?: return
+        val episodes: List<Episode> = Repo.loadEpisodes(playlist.id, series.id)
+        val episode = episodes.firstOrNull() ?: run {
+            Logx.w("E2E_VOD_PLAY_NO_EPISODE series=${series.name}")
+            return
+        }
+        val url = Repo.episodeUrl(playlist.id, episode) ?: run {
+            Logx.w("E2E_VOD_PLAY_EPISODE_NO_URL series=${series.name}")
+            return
+        }
+        val channel = Channel(
+            id = "episode:${playlist.id}:${episode.id}",
+            playlistId = playlist.id,
+            name = episode.title.ifBlank {
+                "${series.name} S${episode.season}E${episode.number}"
+            },
+            group = series.name,
+            url = url,
+            streamId = episode.id
+        )
+        Logx.i(
+            "E2E_VOD_PLAY_EPISODE category=$category series=${series.name} " +
+                "S${episode.season}E${episode.number} name=${episode.title} url=$url"
+        )
         Repo.requestPlay(channel)
     }
 

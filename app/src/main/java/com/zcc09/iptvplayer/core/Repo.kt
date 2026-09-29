@@ -417,7 +417,8 @@ object Repo {
                         VodItem(
                             id = it.id, playlistId = playlistId, name = it.name,
                             categoryId = it.categoryId, icon = it.icon,
-                            containerExtension = it.containerExtension, kind = MediaKind.MOVIE
+                            containerExtension = it.containerExtension, kind = MediaKind.MOVIE,
+                            directSource = it.directSource, year = it.year, rating = it.rating
                         )
                     }
 

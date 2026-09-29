@@ -95,7 +95,11 @@ data class VodItem(
     val categoryId: String = "",
     val icon: String = "",
     val containerExtension: String = "",
-    val kind: MediaKind = MediaKind.MOVIE
+    val kind: MediaKind = MediaKind.MOVIE,
+    /** Panel-supplied playable URL; empty on most panels, but preferred when set. */
+    val directSource: String = "",
+    val year: String = "",
+    val rating: String = ""
 )
 
 /** One episode inside a series. */
@@ -105,7 +109,8 @@ data class Episode(
     val season: Int,
     val number: Int,
     val title: String,
-    val containerExtension: String = "mkv"
+    val containerExtension: String = "mkv",
+    val directSource: String = ""
 )
 
 

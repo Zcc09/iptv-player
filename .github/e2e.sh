@@ -199,6 +199,15 @@ assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback reque
 assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the film actually renders video"
 show_log "E2E_VOD_PLAY|PLAYBACK_"
 
+step "VOD playback: an episode of the first series (shows, not just films)"
+# Films live at /movie/... and episodes at /series/..., so a film-only check would
+# leave half the feature unproven.
+run_action playvodep 150
+assert_log "E2E_VOD_PLAY_EPISODE .*series=.+ S[0-9]+E[0-9]+ .*url=https?://" "episode playback requested"
+assert_log "PLAYBACK_OPENING .*mime=video/x-matroska" "the episode opened as Matroska, not raw TS"
+assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the episode actually renders video"
+show_log "E2E_VOD_PLAY_EPISODE|PLAYBACK_"
+
 step "VOD UI: the Movies tab, driven the way a viewer taps it"
 # The probes above call the repository directly; this taps the real tab in the UI.
 # Only the shape of the count line is asserted, never the catalogue's own titles,

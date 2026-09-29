@@ -60,7 +60,10 @@ class XtreamApi(
         val name: String,
         val icon: String,
         val categoryId: String,
-        val containerExtension: String
+        val containerExtension: String,
+        val directSource: String = "",
+        val year: String = "",
+        val rating: String = ""
     )
 
     data class SeriesEntry(
@@ -107,7 +110,10 @@ class XtreamApi(
                     name = o.optString("name", "Movie $id"),
                     icon = o.optString("stream_icon", ""),
                     categoryId = firstCategoryId(o),
-                    containerExtension = o.optString("container_extension", "mp4").ifBlank { "mp4" }
+                    containerExtension = o.optString("container_extension", "mp4").ifBlank { "mp4" },
+                    directSource = o.optString("direct_source", ""),
+                    year = o.optString("year", "").takeIf { it != "0" } ?: "",
+                    rating = o.optString("rating", "").takeIf { it != "0" && it != "0.0" } ?: ""
                 )
             )
         }
@@ -169,7 +175,8 @@ class XtreamApi(
                         season = o.optString("season").toIntOrNull() ?: season,
                         number = o.optString("episode_num").toIntOrNull() ?: (i + 1),
                         title = o.optString("title", "Episode ${i + 1}"),
-                        containerExtension = o.optString("container_extension", "mkv").ifBlank { "mkv" }
+                        containerExtension = o.optString("container_extension", "mkv").ifBlank { "mkv" },
+                        directSource = o.optString("direct_source", "")
                     )
                 )
             }
@@ -185,11 +192,18 @@ class XtreamApi(
         }
     }
 
-    fun movieUrl(item: VodItem): String =
-        XtreamUrls.movie(base, username, password, item.id, item.containerExtension)
+    // Panels may hand out a playable URL of their own; when they do (live streams
+    // often do, VOD rarely) it wins over the constructed path, exactly as the live
+    // stream handling does.
+    fun movieUrl(item: VodItem): String {
+        if (item.directSource.startsWith("http")) return item.directSource
+        return XtreamUrls.movie(base, username, password, item.id, item.containerExtension)
+    }
 
-    fun episodeUrl(episode: Episode): String =
-        XtreamUrls.episode(base, username, password, episode.id, episode.containerExtension)
+    fun episodeUrl(episode: Episode): String {
+        if (episode.directSource.startsWith("http")) return episode.directSource
+        return XtreamUrls.episode(base, username, password, episode.id, episode.containerExtension)
+    }
 
     fun auth(): Auth {
         val body = Http.getText(apiUrl(), ua = userAgent)
