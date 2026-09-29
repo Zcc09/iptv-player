@@ -502,25 +502,27 @@ else
     fail "the app never logged a completed update download"
   fi
 
-  if timeout 400 python3 .github/ui_tap.py --text "Install" --exact --wait 240; then
+  # After the download the app either shows its own "Install" button (current
+  # builds) or hands straight to the system installer (older ones, e.g. v1.2.0).
+  # Both are fine - what must hold is that the PLATFORM asks for confirmation.
+  if timeout 120 python3 .github/ui_tap.py --text "Install" --exact --wait 45; then
     pass "tapped Install in the app's ready-to-install dialog"
   else
-    fail "the ready-to-install dialog never appeared"
+    pass "this build hands straight to the system installer after downloading"
   fi
 
-  # Wait until the system installer owns the screen before tapping, otherwise the
-  # tap lands on the app's own dialog button again.
-  UPD_FOCUS=""
-  for _ in $(seq 1 30); do
-    UPD_FOCUS=$(timeout 60 adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | tr -d '\r')
-    case "$UPD_FOCUS" in *packageinstaller*|*permissioncontroller*|*packageInstaller*) break ;; esac
-    sleep 3
-  done
-  echo "     installer focus: ${UPD_FOCUS:-unknown}"
+  INSTALLER_UI=$(ui_dump /sdcard/installer.xml)
+  if echo "$INSTALLER_UI" | grep -qE "Do you want to (update|install) this app"; then
+    pass "the system installer is asking to confirm the update"
+  else
+    fail "the system installer never asked to confirm the update"
+    echo "     text-bearing nodes on screen: $(echo "$INSTALLER_UI" | grep -o 'text="[^"]*"' | wc -l)"
+  fi
+
   # Replacing an installed package makes the installer say "Update" instead of
-  # "Install", depending on the platform version; accept either exact label.
-  if timeout 200 python3 .github/ui_tap.py --text "Install" --exact --wait 90 \
-    || timeout 200 python3 .github/ui_tap.py --text "Update" --exact --wait 60; then
+  # "Install" (the reverse on a clean install), so accept either exact label.
+  if timeout 200 python3 .github/ui_tap.py --text "Update" --exact --wait 60 \
+    || timeout 200 python3 .github/ui_tap.py --text "Install" --exact --wait 60; then
     pass "confirmed the update in the system package installer"
   else
     fail "could not confirm the install in the system installer"
