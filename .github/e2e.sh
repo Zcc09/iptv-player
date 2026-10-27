@@ -82,10 +82,12 @@ assert_ui() { # <xml> <pattern> <description>
   return 1
 }
 
-run_action() { # action, seconds to wait
+run_action() { # action, seconds to wait, [extra e2e_index]
   timeout 30 adb logcat -c > /dev/null 2>&1 || echo "     (logcat -c failed)"
   timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
-  timeout 90 adb shell am start -W -n "$ACT" -e e2e "$1" > /dev/null 2>&1 \
+  local extra=()
+  [ -n "${3:-}" ] && extra=(-e e2e_index "$3")
+  timeout 90 adb shell am start -W -n "$ACT" -e e2e "$1" "${extra[@]}" > /dev/null 2>&1 \
     || echo "     (am start returned non-zero for '$1')"
   sleep "$2"
   refresh_log
@@ -410,38 +412,17 @@ else
 fi
 show_log "UPDATE_INSTALL_"
 
-step "Store screenshots (generic demo playlist, no provider details)"
-# Uses a demo playlist served from this repo (generic channel names, generated
-# logo tiles, public test streams) so the store listing never shows a real
-# provider, credential, or channel name. The suite set TV mode earlier, so the
-# phone shots explicitly switch back to the mobile layout first.
-run_action mobilemode 8
-run_action demo 50
-assert_log "E2E_DEMO_SEEDED .*channels=[1-9][0-9]*" "demo playlist loaded for the screenshots"
-shot 1-playlists
-run_action openchannels 15
-shot 2-channels
-run_action playdemo 50
-assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the demo channel actually renders video"
-shot 3-live-player
-run_action opensettings 12
-shot 4-settings
-run_action tvdismiss 8
-tvshape
-run_action tvmode 14
-shot 5-tv-home
-tvexit
-
 step "PVR: record the live channel, stop it, and verify real bytes landed"
 # One action performs the whole capture: force-stopping the app between
 # actions would kill the in-process capture job. Bytes on disk (not just a
 # state flag) is what proves it. Live panels drop a channel's upstream now
 # and then (observed: 4 TS packets then EOF), so retry on the next channel;
 # a short capture that still wrote real bytes passes as the degraded case,
-# only zero-data fails the step.
+# only zero-data fails the step. MUST run before the store-screenshots step,
+# whose demo action wipes the seeded CI playlists.
 REC_OK=""
 for n in 1 2 3; do
-  run_action "rec $n" 45
+  run_action rec 45 "$n"
   if echo "$LOG" | grep -qE "E2E REC stop=.* bytes=[1-9][0-9]* reason=user"; then
     REC_OK="full"
     break
@@ -463,6 +444,28 @@ else
   fail "no channel produced captured bytes"
 fi
 show_log "E2E REC"
+
+step "Store screenshots (generic demo playlist, no provider details)"
+# Uses a demo playlist served from this repo (generic channel names, generated
+# logo tiles, public test streams) so the store listing never shows a real
+# provider, credential, or channel name. The suite set TV mode earlier, so the
+# phone shots explicitly switch back to the mobile layout first.
+run_action mobilemode 8
+run_action demo 50
+assert_log "E2E_DEMO_SEEDED .*channels=[1-9][0-9]*" "demo playlist loaded for the screenshots"
+shot 1-playlists
+run_action openchannels 15
+shot 2-channels
+run_action playdemo 50
+assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the demo channel actually renders video"
+shot 3-live-player
+run_action opensettings 12
+shot 4-settings
+run_action tvdismiss 8
+tvshape
+run_action tvmode 14
+shot 5-tv-home
+tvexit
 
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)

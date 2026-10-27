@@ -193,14 +193,12 @@ object E2e : E2eHandler {
             "playvod" -> scope.launch { vodPlayFirstMovie() }
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "epg" -> scope.launch { epgProbe() }
-            "rec" -> scope.launch { recCapture(activity) }
-            // "rec <n>" — record the Nth channel (live panels drop a channel's
-            // upstream now and then; the suite retries on the next channel).
-            "rec 1" -> scope.launch { recCapture(activity, 1) }
-            "rec 2" -> scope.launch { recCapture(activity, 2) }
-            "rec 3" -> scope.launch { recCapture(activity, 3) }
-            "rec 4" -> scope.launch { recCapture(activity, 4) }
-            "rec 5" -> scope.launch { recCapture(activity, 5) }
+            "rec" -> scope.launch {
+                // The channel index is a separate extra: adb joins extra
+                // values into one shell command line, so a space inside the
+                // e2e value ("rec 2") would be split and lost on-device.
+                recCapture(activity, extras["e2e_index"]?.toIntOrNull() ?: 1)
+            }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -527,6 +525,10 @@ object E2e : E2eHandler {
      * killing the in-process capture job in between.
      */
     private suspend fun recCapture(activity: Activity, index: Int = 1) {
+        if (Repo.playlists.value.none { it.id == M3U_ID }) {
+            Logx.w("E2E REC_NO_PLAYLIST")
+            return
+        }
         val channel = Repo.channelsOf(M3U_ID).getOrNull(index - 1)
         if (channel == null) { Logx.w("E2E REC_NO_CHANNEL index=$index"); return }
         if (!Recorder.start(activity, channel.url, channel.name)) {
