@@ -133,6 +133,8 @@ jobs:
           path: |
             logcat-full.txt
             e2e-*.txt
+            e2e-suite.log
+            app-logcat-full.txt
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v7

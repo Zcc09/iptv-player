@@ -17,6 +17,12 @@
 
 set -uo pipefail
 
+# Persist the whole suite transcript as an artifact: job logs need admin
+# rights to download, but artifacts do not, so a red run must stay
+# diagnosable from the artifacts alone.
+exec > >(tee e2e-suite.log) 2>&1
+trap 'timeout 90 adb logcat -d -v time > app-logcat-full.txt 2>/dev/null || true' EXIT
+
 PKG=com.zcc09.iptvplayer
 ACT="$PKG/.MainActivity"
 APK=apk/iptv-player-debug.apk
@@ -431,6 +437,10 @@ step "PVR: record the live channel, stop it, and verify real bytes landed"
 # actions would kill the in-process capture job. Bytes on disk (not just a
 # state flag) is what proves it.
 run_action rec 45
+# The failure mode lives in the app's logs (open failed? 0-byte stream? crash?),
+# so surface the whole app log here regardless of what the asserts find.
+echo "     --- app log, IPTV_E2E + IPTVPlayer (last 50 lines) ---"
+timeout 60 adb logcat -d -v time IPTV_E2E:V IPTVPlayer:V '*:S' 2>/dev/null | tail -50 | sed 's/^/     | /'
 assert_log "E2E REC start=" "recording started"
 assert_log "E2E REC stop=.* bytes=[1-9][0-9]* reason=user" "recording stopped with captured bytes on disk"
 show_log "E2E REC"
