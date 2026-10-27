@@ -193,11 +193,7 @@ object E2e : E2eHandler {
             "playvod" -> scope.launch { vodPlayFirstMovie() }
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "epg" -> scope.launch { epgProbe() }
-            "recstart" -> scope.launch { recStart(activity) }
-            "recstop" -> {
-                Recorder.stop(Recorder.StopReason.USER)
-                Logx.i("E2E REC_STOP_REQUESTED")
-            }
+            "rec" -> scope.launch { recCapture(activity) }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -517,11 +513,23 @@ object E2e : E2eHandler {
         } catch (t: Throwable) { Logx.e("E2E EPG_PROBE_FAILED", t) }
     }
 
-    /** Start a real capture of the first channel; the Recorder writes TS bytes to disk. */
-    private fun recStart(activity: Activity) {
+    /**
+     * One complete PVR capture in a single process lifetime: start, hold for a
+     * few seconds of real stream data, then stop. Splitting start/stop across
+     * two actions would not work because each action force-stops the app,
+     * killing the in-process capture job in between.
+     */
+    private suspend fun recCapture(activity: Activity) {
         val channel = firstChannel()
         if (channel == null) { Logx.w("E2E REC_NO_CHANNEL"); return }
-        if (!Recorder.start(activity, channel.url, channel.name)) Logx.w("E2E REC_START_FAILED")
+        if (!Recorder.start(activity, channel.url, channel.name)) {
+            Logx.w("E2E REC_START_FAILED"); return
+        }
+        try {
+            delay(12_000)
+        } finally {
+            Recorder.stop(Recorder.StopReason.USER)
+        }
     }
 
     private fun firstChannel(): Channel? {

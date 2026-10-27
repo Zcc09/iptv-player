@@ -427,12 +427,11 @@ shot 5-tv-home
 tvexit
 
 step "PVR: record the live channel, stop it, and verify real bytes landed"
-# The recorder is an independent background capture, so it does not need the
-# player on screen; bytes on disk (not just a state flag) is what proves it.
-run_action recstart 10
+# One action performs the whole capture: force-stopping the app between
+# actions would kill the in-process capture job. Bytes on disk (not just a
+# state flag) is what proves it.
+run_action rec 45
 assert_log "E2E REC start=" "recording started"
-sleep 12
-run_action recstop 25
 assert_log "E2E REC stop=.* bytes=[1-9][0-9]* reason=user" "recording stopped with captured bytes on disk"
 show_log "E2E REC"
 
