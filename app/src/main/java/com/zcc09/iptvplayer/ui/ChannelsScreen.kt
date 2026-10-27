@@ -137,7 +137,11 @@ fun ChannelsScreen(playlistId: String) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = tab, onSelect = { tab = it }, showVod = vodAvailable)
+            // M3U-only accounts have no tab row at all (as before the guide
+            // existed): the EPG and the VOD catalogues are XC-only.
+            if (vodAvailable) {
+                VodTabRow(selected = tab, onSelect = { tab = it })
+            }
             if (tab == ChannelTab.GUIDE) {
                 GuideScreen(playlistId)
             } else {

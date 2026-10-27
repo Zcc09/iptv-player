@@ -68,14 +68,12 @@ internal fun vodItemKey(playlistId: String, kind: MediaKind, categoryId: String)
     "$playlistId|${kind.name}|$categoryId"
 
 @Composable
-internal fun VodTabRow(selected: ChannelTab, onSelect: (ChannelTab) -> Unit, showVod: Boolean) {
+internal fun VodTabRow(selected: ChannelTab, onSelect: (ChannelTab) -> Unit) {
     TabRow(selectedTabIndex = selected.ordinal) {
         VodTabItem(selected, onSelect, ChannelTab.LIVE, "Live")
         VodTabItem(selected, onSelect, ChannelTab.GUIDE, "Guide")
-        if (showVod) {
-            VodTabItem(selected, onSelect, ChannelTab.MOVIES, "Movies")
-            VodTabItem(selected, onSelect, ChannelTab.SERIES, "Shows")
-        }
+        VodTabItem(selected, onSelect, ChannelTab.MOVIES, "Movies")
+        VodTabItem(selected, onSelect, ChannelTab.SERIES, "Shows")
     }
 }
 
@@ -118,7 +116,7 @@ internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (ChannelTab) 
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = ChannelTab.fromMedia(kind), onSelect = onTab, showVod = true)
+            VodTabRow(selected = ChannelTab.fromMedia(kind), onSelect = onTab)
             VodTab(playlistId, kind)
         }
     }
