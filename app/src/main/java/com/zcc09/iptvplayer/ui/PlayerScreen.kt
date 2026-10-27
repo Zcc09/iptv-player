@@ -80,7 +80,10 @@ import androidx.media3.ui.PlayerView
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.EpgParser
+import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.Logx
+import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.UrlTools
@@ -121,6 +124,30 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     var videoSizeText by remember { mutableStateOf<String?>(null) }
     val showNavHints by Repo.showNavHints.collectAsState()
     val focusRequester = remember { FocusRequester() }
+
+    // EPG: "now / next" line for live channels. The store refetches when
+    // stale (10 min) and the line refreshes every minute.
+    var epgNowNext by remember(channel.id) { mutableStateOf<Pair<String, String?>?>(null) }
+    LaunchedEffect(channel.id) {
+        if (channel.streamId <= 0) return@LaunchedEffect
+        val pl = Repo.playlist(channel.playlistId) ?: return@LaunchedEffect
+        if (pl.type != PlaylistType.XTREAM) return@LaunchedEffect
+        EpgStore.refresh(pl)
+        var announced = false
+        while (true) {
+            val now = System.currentTimeMillis() / 1000
+            val cur = EpgStore.nowProgram(channel.playlistId, channel.streamId, now)
+            val nxt = EpgStore.nextProgram(channel.playlistId, channel.streamId, now)
+            epgNowNext = cur?.let {
+                it.title to nxt?.let { "Next: ${it.title} ${EpgParser.formatHm(it.startEpochSec)}" }
+            }
+            if (cur != null && !announced) {
+                announced = true
+                Logx.i("E2E EPG now=${channel.name} ${cur.title}")
+            }
+            delay(60_000)
+        }
+    }
 
     val exo = remember(channel.id) { Playback.createPlayer(context, Repo.userAgent) }
     val siblings = remember(channel.playlistId) { Repo.channelsOf(channel.playlistId) }
@@ -344,6 +371,22 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                             maxLines = 1,
                             color = Color.White
                         )
+                        epgNowNext?.let { (now, next) ->
+                            Text(
+                                now,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                            next?.let {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                         if (casting) {
                             Text(
                                 "Casting to ${connectedDevice.ifBlank { "TV" }}",
@@ -459,6 +502,12 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+                        epgNowNext?.let { (now, next) ->
+                            Text(now, fontSize = 12.sp, color = Color(0xFF94A3B8), maxLines = 1)
+                            next?.let {
+                                Text(it, fontSize = 12.sp, color = Color(0xFF94A3B8), maxLines = 1)
+                            }
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)

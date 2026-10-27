@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.ChannelTab
 import com.zcc09.iptvplayer.core.Episode
 import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Repo
@@ -67,19 +68,22 @@ internal fun vodItemKey(playlistId: String, kind: MediaKind, categoryId: String)
     "$playlistId|${kind.name}|$categoryId"
 
 @Composable
-internal fun VodTabRow(selected: MediaKind, onSelect: (MediaKind) -> Unit) {
+internal fun VodTabRow(selected: ChannelTab, onSelect: (ChannelTab) -> Unit, showVod: Boolean) {
     TabRow(selectedTabIndex = selected.ordinal) {
-        VodTabItem(selected, onSelect, MediaKind.LIVE, "Live")
-        VodTabItem(selected, onSelect, MediaKind.MOVIE, "Movies")
-        VodTabItem(selected, onSelect, MediaKind.SERIES, "Shows")
+        VodTabItem(selected, onSelect, ChannelTab.LIVE, "Live")
+        VodTabItem(selected, onSelect, ChannelTab.GUIDE, "Guide")
+        if (showVod) {
+            VodTabItem(selected, onSelect, ChannelTab.MOVIES, "Movies")
+            VodTabItem(selected, onSelect, ChannelTab.SERIES, "Shows")
+        }
     }
 }
 
 @Composable
 private fun VodTabItem(
-    selected: MediaKind,
-    onSelect: (MediaKind) -> Unit,
-    kind: MediaKind,
+    selected: ChannelTab,
+    onSelect: (ChannelTab) -> Unit,
+    kind: ChannelTab,
     label: String
 ) {
     Tab(
@@ -92,7 +96,7 @@ private fun VodTabItem(
 /** Films and series own screen, with the same Live/Movies/Shows switcher. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (MediaKind) -> Unit) {
+internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (ChannelTab) -> Unit) {
     // Same title as the live view (the playlist), so the two surfaces read alike;
     // the tab row already says which catalogue is open. No refresh action here
     // either - unlike a live channel list, a film category does not go stale.
@@ -114,7 +118,7 @@ internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (MediaKind) -
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = kind, onSelect = onTab)
+            VodTabRow(selected = ChannelTab.fromMedia(kind), onSelect = onTab, showVod = true)
             VodTab(playlistId, kind)
         }
     }

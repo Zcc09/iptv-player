@@ -114,6 +114,9 @@ fun TvHomeScreen() {
     var selectedGroup by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
+    // TV Guide (EPG) overlay: replaces the spotlight + grid right pane.
+    var showGuide by remember { mutableStateOf(false) }
+
     // Filtered channels list
     val filteredChannels = remember(allChannels, selectedGroup, searchQuery, favorites) {
         allChannels.asSequence()
@@ -217,6 +220,8 @@ fun TvHomeScreen() {
                         selectedGroup = selectedGroup,
                         groups = groups,
                         onSelectGroup = { selectedGroup = it },
+                        showGuide = showGuide,
+                        onShowGuide = { showGuide = it },
                         modifier = Modifier
                             .width(260.dp)
                             .fillMaxHeight()
@@ -231,13 +236,16 @@ fun TvHomeScreen() {
                             .background(Color.White.copy(alpha = 0.06f))
                     )
 
-                    // Right Content Area: Spotlight Header + Channel Grid
+                    // Right Content Area: Spotlight Header + Channel Grid (or EPG guide)
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .padding(horizontal = 20.dp, vertical = 12.dp)
                     ) {
+                        if (showGuide) {
+                            GuideScreen(playlistId = activePlaylistId, tv = true)
+                        } else {
                         // Spotlight Banner
                         spotlightChannel?.let { channel ->
                             TvChannelSpotlight(
@@ -339,6 +347,7 @@ fun TvHomeScreen() {
                                     )
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -502,6 +511,8 @@ private fun TvSidebar(
     selectedGroup: String?,
     groups: List<String>,
     onSelectGroup: (String?) -> Unit,
+    showGuide: Boolean,
+    onShowGuide: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -549,9 +560,12 @@ private fun TvSidebar(
             TvNavButton(
                 label = "All Channels",
                 iconText = "📺",
-                selected = selectedGroup == null,
+                selected = selectedGroup == null && !showGuide,
                 badgeText = totalChannels.toString(),
-                onClick = { onSelectGroup(null) }
+                onClick = {
+                    onShowGuide(false)
+                    onSelectGroup(null)
+                }
             )
         }
 
@@ -559,9 +573,21 @@ private fun TvSidebar(
             TvNavButton(
                 label = "Favourites",
                 iconText = "★",
-                selected = selectedGroup == "__FAV__",
+                selected = selectedGroup == "__FAV__" && !showGuide,
                 badgeText = favoriteCount.toString(),
-                onClick = { onSelectGroup("__FAV__") }
+                onClick = {
+                    onShowGuide(false)
+                    onSelectGroup("__FAV__")
+                }
+            )
+        }
+
+        item {
+            TvNavButton(
+                label = "TV Guide",
+                iconText = "📅",
+                selected = showGuide,
+                onClick = { onShowGuide(!showGuide) }
             )
         }
 
@@ -580,8 +606,11 @@ private fun TvSidebar(
                 TvNavButton(
                     label = groupName,
                     iconText = "📁",
-                    selected = selectedGroup == groupName,
-                    onClick = { onSelectGroup(groupName) }
+                    selected = selectedGroup == groupName && !showGuide,
+                    onClick = {
+                        onShowGuide(false)
+                        onSelectGroup(groupName)
+                    }
                 )
             }
         }

@@ -56,6 +56,8 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val castMode by Repo.castMode.collectAsState()
     val uiMode by Repo.uiMode.collectAsState()
+    val epgWindow by Repo.epgWindowHours.collectAsState()
+    val epgNowPlaying by Repo.epgNowPlaying.collectAsState()
     val showNavHints by Repo.showNavHints.collectAsState()
     val playlists by Repo.playlists.collectAsState()
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
@@ -152,6 +154,47 @@ fun SettingsScreen() {
             }
 
             Spacer(Modifier.height(18.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            Text("TV Guide", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "The programme guide shows what is now and next on each live channel " +
+                    "(Xtream Codes accounts only).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(2 to "2h", 4 to "4h", 6 to "6h").forEach { (hours, label) ->
+                    FilterChip(
+                        selected = epgWindow == hours,
+                        onClick = { Repo.setEpgWindowHours(hours) },
+                        label = { Text("Window: $label") }
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Now playing", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Show the current programme under each channel name in the channel list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = epgNowPlaying,
+                    onCheckedChange = { Repo.setEpgNowPlaying(it) }
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
