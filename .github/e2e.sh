@@ -228,6 +228,25 @@ else
   echo "     text-bearing nodes on screen: $(echo "$VOD_UI" | grep -o 'text="[^"]*"' | wc -l)"
 fi
 
+step "Guide UI: the EPG tab, driven the way a viewer taps it"
+# The CI server may or may not publish an EPG, so both definite outcomes are
+# accepted; what must not happen is silence (a crash or a swallowed error).
+if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
+  pass "tapped the Guide tab"
+else
+  fail "the Guide tab was not on screen for an Xtream playlist"
+fi
+sleep 25
+refresh_log
+if echo "$LOG" | grep -qE "E2E EPG programs=[0-9]+ channels=[0-9]+"; then
+  pass "the guide rendered its EPG data"
+elif echo "$LOG" | grep -q "E2E EPG_MISSING"; then
+  pass "the guide reached the explicit no-EPG state (server publishes no guide)"
+else
+  fail "the guide never reached a definite EPG state (no E2E EPG line after tapping)"
+fi
+show_log "E2E EPG"
+
 step "Refresh all playlists (auto-refresh code path)"
 run_action refresh 55
 assert_log "REFRESH_ALL_DONE channels=[1-9][0-9]*" "refresh-all re-downloaded channels"
@@ -406,6 +425,16 @@ tvshape
 run_action tvmode 14
 shot 5-tv-home
 tvexit
+
+step "PVR: record the live channel, stop it, and verify real bytes landed"
+# The recorder is an independent background capture, so it does not need the
+# player on screen; bytes on disk (not just a state flag) is what proves it.
+run_action recstart 10
+assert_log "E2E REC start=" "recording started"
+sleep 12
+run_action recstop 25
+assert_log "E2E REC stop=.* bytes=[1-9][0-9]* reason=user" "recording stopped with captured bytes on disk"
+show_log "E2E REC"
 
 step "Crash check"
 CRASHES=$(timeout 120 adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)

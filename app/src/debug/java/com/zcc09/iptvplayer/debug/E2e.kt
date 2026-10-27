@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer.debug
 import android.app.Activity
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.E2eHandler
 import com.zcc09.iptvplayer.core.Episode
 import com.zcc09.iptvplayer.core.Http
@@ -10,6 +11,7 @@ import com.zcc09.iptvplayer.core.Logx
 import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Playlist
 import com.zcc09.iptvplayer.core.PlaylistType
+import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.VodItem
@@ -190,6 +192,12 @@ object E2e : E2eHandler {
             "vodshows" -> scope.launch { vodProbeShows() }
             "playvod" -> scope.launch { vodPlayFirstMovie() }
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
+            "epg" -> scope.launch { epgProbe() }
+            "recstart" -> scope.launch { recStart(activity) }
+            "recstop" -> {
+                Recorder.stop(Recorder.StopReason.USER)
+                Logx.i("E2E REC_STOP_REQUESTED")
+            }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -496,6 +504,24 @@ object E2e : E2eHandler {
         } catch (t: Throwable) {
             Logx.e("XC_API_FAILED", t)
         }
+    }
+
+    /** Fetch (or reuse) the EPG for the CI Xtream playlist and report the outcome. */
+    private suspend fun epgProbe() {
+        try {
+            val playlist = Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
+            if (playlist == null) { Logx.w("E2E EPG_NO_XC"); return }
+            EpgStore.refresh(playlist)
+            val cache = EpgStore.flow(playlist.id).value
+            Logx.i("E2E EPG_SNAAPSHOT streams=${cache?.programs?.size ?: 0} missing=${cache?.missing ?: true}")
+        } catch (t: Throwable) { Logx.e("E2E EPG_PROBE_FAILED", t) }
+    }
+
+    /** Start a real capture of the first channel; the Recorder writes TS bytes to disk. */
+    private fun recStart(activity: Activity) {
+        val channel = firstChannel()
+        if (channel == null) { Logx.w("E2E REC_NO_CHANNEL"); return }
+        if (!Recorder.start(activity, channel.url, channel.name)) Logx.w("E2E REC_START_FAILED")
     }
 
     private fun firstChannel(): Channel? {
