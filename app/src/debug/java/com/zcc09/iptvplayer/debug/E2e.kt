@@ -194,6 +194,13 @@ object E2e : E2eHandler {
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "epg" -> scope.launch { epgProbe() }
             "rec" -> scope.launch { recCapture(activity) }
+            // "rec <n>" — record the Nth channel (live panels drop a channel's
+            // upstream now and then; the suite retries on the next channel).
+            "rec 1" -> scope.launch { recCapture(activity, 1) }
+            "rec 2" -> scope.launch { recCapture(activity, 2) }
+            "rec 3" -> scope.launch { recCapture(activity, 3) }
+            "rec 4" -> scope.launch { recCapture(activity, 4) }
+            "rec 5" -> scope.launch { recCapture(activity, 5) }
             "updatecheck" -> scope.launch {
                 try {
                     val pkgInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
@@ -519,9 +526,9 @@ object E2e : E2eHandler {
      * two actions would not work because each action force-stops the app,
      * killing the in-process capture job in between.
      */
-    private suspend fun recCapture(activity: Activity) {
-        val channel = firstChannel()
-        if (channel == null) { Logx.w("E2E REC_NO_CHANNEL"); return }
+    private suspend fun recCapture(activity: Activity, index: Int = 1) {
+        val channel = Repo.channelsOf(M3U_ID).getOrNull(index - 1)
+        if (channel == null) { Logx.w("E2E REC_NO_CHANNEL index=$index"); return }
         if (!Recorder.start(activity, channel.url, channel.name)) {
             Logx.w("E2E REC_START_FAILED"); return
         }
