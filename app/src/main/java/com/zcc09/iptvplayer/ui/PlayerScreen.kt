@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -81,6 +82,7 @@ import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.Logx
+import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.UrlTools
@@ -223,6 +225,24 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                 delay(500)
             }
         }
+    }
+
+    // ------------------------------------------------------------- recording
+    // The capture runs in its own background coroutine (see Recorder); the
+    // player only owns the user-driven stops: explicit stop, channel switch
+    // (unless the setting keeps it going) and player close.
+    val recInfo by Recorder.state.collectAsState()
+    var recordChannelId by remember { mutableStateOf(channel.id) }
+    LaunchedEffect(channel.id) {
+        if (recordChannelId != channel.id) {
+            if (Recorder.isActive() && !Repo.keepRecording.value) {
+                Recorder.stop(Recorder.StopReason.CHANNEL_SWITCH)
+            }
+            recordChannelId = channel.id
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { Recorder.stopIfActive(Recorder.StopReason.PLAYER_CLOSED) }
     }
 
     LaunchedEffect(showCastDialog) {
@@ -382,6 +402,26 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                                 act.enterPictureInPictureMode(params)
                             }.onFailure { Logx.w("PIP_ENTER_FAILED ${it.message}") }
                         }) { Text("PiP", color = Color.White) }
+                    }
+                    // Record toggle: the capture is independent of the player, so
+                    // the red dot tracks the recorder, not ExoPlayer state.
+                    TextButton(onClick = {
+                        if (recInfo != null) {
+                            Recorder.stop(Recorder.StopReason.USER)
+                        } else if (!Recorder.start(context, url, channel.name)) {
+                            Logx.w("REC_START_REJECTED $url")
+                        }
+                    }) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            if (recInfo != null) {
+                                Box(modifier = Modifier.size(8.dp).background(Color.Red))
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(if (recInfo != null) "Stop" else "Record", color = Color.White)
+                        }
                     }
                     IconButton(
                         onClick = { showCastDialog = true },

@@ -66,41 +66,65 @@ internal fun vodCatKey(playlistId: String, kind: MediaKind) = "$playlistId|${kin
 internal fun vodItemKey(playlistId: String, kind: MediaKind, categoryId: String) =
     "$playlistId|${kind.name}|$categoryId"
 
+/** Tabs of the channels screen row: Live, (Movies, Shows for VOD accounts), Recordings. */
+internal enum class ChannelsTab { LIVE, MOVIE, SERIES, RECORDINGS }
+
+private fun ChannelsTab.label(): String = when (this) {
+    ChannelsTab.LIVE -> "Live"
+    ChannelsTab.MOVIE -> "Movies"
+    ChannelsTab.SERIES -> "Shows"
+    ChannelsTab.RECORDINGS -> "Recordings"
+}
+
+private fun ChannelsTab.mediaKind(): MediaKind = when (this) {
+    ChannelsTab.MOVIE -> MediaKind.MOVIE
+    ChannelsTab.SERIES -> MediaKind.SERIES
+    else -> MediaKind.LIVE
+}
+
 @Composable
-internal fun VodTabRow(selected: MediaKind, onSelect: (MediaKind) -> Unit) {
-    TabRow(selectedTabIndex = selected.ordinal) {
-        VodTabItem(selected, onSelect, MediaKind.LIVE, "Live")
-        VodTabItem(selected, onSelect, MediaKind.MOVIE, "Movies")
-        VodTabItem(selected, onSelect, MediaKind.SERIES, "Shows")
+internal fun VodTabRow(selected: ChannelsTab, showVodTabs: Boolean, onSelect: (ChannelsTab) -> Unit) {
+    val tabs = buildList {
+        add(ChannelsTab.LIVE)
+        if (showVodTabs) {
+            add(ChannelsTab.MOVIE)
+            add(ChannelsTab.SERIES)
+        }
+        add(ChannelsTab.RECORDINGS)
+    }
+    TabRow(selectedTabIndex = tabs.indexOf(selected)) {
+        tabs.forEach { tab ->
+            Tab(
+                selected = tab == selected,
+                onClick = { onSelect(tab) },
+                text = { Text(tab.label()) }
+            )
+        }
     }
 }
 
-@Composable
-private fun VodTabItem(
-    selected: MediaKind,
-    onSelect: (MediaKind) -> Unit,
-    kind: MediaKind,
-    label: String
-) {
-    Tab(
-        selected = selected == kind,
-        onClick = { onSelect(kind) },
-        text = { Text(label) }
-    )
-}
-
-/** Films and series own screen, with the same Live/Movies/Shows switcher. */
+/** Films, series and recordings behind the same tab row. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (MediaKind) -> Unit) {
-    // Same title as the live view (the playlist), so the two surfaces read alike;
-    // the tab row already says which catalogue is open. No refresh action here
-    // either - unlike a live channel list, a film category does not go stale.
+internal fun VodScreen(
+    playlistId: String,
+    tab: ChannelsTab,
+    showVodTabs: Boolean,
+    onTab: (ChannelsTab) -> Unit
+) {
     val playlist = remember(playlistId) { Repo.playlist(playlistId) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(playlist?.name ?: if (kind == MediaKind.MOVIE) "Movies" else "Shows") },
+                title = {
+                    Text(
+                        when (tab) {
+                            ChannelsTab.RECORDINGS -> "Recordings"
+                            else -> playlist?.name
+                                ?: if (tab == ChannelsTab.MOVIE) "Movies" else "Shows"
+                        }
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { Nav.pop() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -114,8 +138,12 @@ internal fun VodScreen(playlistId: String, kind: MediaKind, onTab: (MediaKind) -
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = kind, onSelect = onTab)
-            VodTab(playlistId, kind)
+            VodTabRow(selected = tab, showVodTabs = showVodTabs, onSelect = onTab)
+            if (tab == ChannelsTab.RECORDINGS) {
+                RecordingsTabScreen()
+            } else {
+                VodTab(playlistId, tab.mediaKind())
+            }
         }
     }
 }

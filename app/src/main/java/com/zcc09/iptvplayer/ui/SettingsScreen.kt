@@ -180,6 +180,40 @@ fun SettingsScreen() {
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
+            val keepRecording by Repo.keepRecording.collectAsState()
+            Text("Recording", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Keep recording when channel changes", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Off: switching to another channel stops the current recording. " +
+                            "On: the capture keeps running on the original stream until you stop it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = keepRecording,
+                    onCheckedChange = {
+                        Repo.setKeepRecording(it)
+                        Repo.postStatus(
+                            if (it) "Recordings keep running across channel changes"
+                            else "Recordings stop on channel change"
+                        )
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             Text("Casting", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(

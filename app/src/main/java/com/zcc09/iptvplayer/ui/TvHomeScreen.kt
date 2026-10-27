@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,11 +76,14 @@ import androidx.compose.ui.unit.sp
 import com.zcc09.iptvplayer.core.AppUiMode
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.Playlist
+import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.Repo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * 10-foot Android TV & Gamepad home interface.
@@ -95,6 +99,13 @@ fun TvHomeScreen() {
     val busy by Repo.busy.collectAsState()
     val tvSetupDismissed by Repo.tvSetupDismissed.collectAsState()
     val showNavHints by Repo.showNavHints.collectAsState()
+
+    val context = LocalContext.current
+    // Badge for the Recordings tile on the home screen.
+    var recordingsCount by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        recordingsCount = withContext(Dispatchers.IO) { Recorder.list(context).size }
+    }
 
     var showTvSetupDialog by remember { mutableStateOf(!tvSetupDismissed) }
 
@@ -253,6 +264,18 @@ fun TvHomeScreen() {
                             )
                             Spacer(Modifier.height(14.dp))
                         }
+
+                        // Quick-access tile: the recordings list (10-foot mode).
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            TvRecordingsTile(
+                                count = recordingsCount,
+                                onOpen = { Nav.push(Screen.Recordings) }
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
 
                         // Search & Section Title
                         Row(
@@ -774,6 +797,45 @@ private fun TvChannelCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Quick-access tile opening the recordings list (10-foot mode).
+ */
+@Composable
+private fun TvRecordingsTile(count: Int, onOpen: () -> Unit) {
+    TvFocusableCard(
+        onClick = onOpen,
+        modifier = Modifier
+            .width(220.dp)
+            .height(64.dp)
+    ) { isFocused ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp)
+        ) {
+            Text(
+                text = "🎬",
+                fontSize = 20.sp,
+                modifier = Modifier.padding(end = 12.dp)
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Recordings",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                    color = Color.White
+                )
+                Text(
+                    text = "$count file${if (count == 1) "" else "s"}",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8)
+                )
             }
         }
     }

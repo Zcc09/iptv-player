@@ -87,6 +87,7 @@ fun AppRoot() {
             is Screen.Channels -> ChannelsScreen(screen.playlistId)
             is Screen.Player -> PlayerScreen(screen.channel, screen.urlOverride)
             is Screen.Series -> SeriesScreen(screen.playlistId, screen.seriesId, screen.title)
+            is Screen.Recordings -> RecordingsScreen()
             is Screen.Settings -> SettingsScreen()
         }
 

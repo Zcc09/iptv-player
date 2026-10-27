@@ -49,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
-import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Repo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,13 +60,14 @@ fun ChannelsScreen(playlistId: String) {
     val busy by Repo.busy.collectAsState()
 
     // Xtream accounts expose films and series; a plain M3U link has no VOD API.
+    // Recordings are global, so the tab row shows for every playlist.
     val vodAvailable = remember(playlistId) { Repo.supportsVod(playlistId) }
-    var tab by remember(playlistId) { mutableStateOf(MediaKind.LIVE) }
+    var tab by remember(playlistId) { mutableStateOf(ChannelsTab.LIVE) }
 
-    // Films and series live in their own screen tree; the live list below is only
-    // rendered for the Live tab.
-    if (vodAvailable && tab != MediaKind.LIVE) {
-        VodScreen(playlistId, tab) { tab = it }
+    // Films, series and recordings live in their own screen tree; the live list
+    // below is only rendered for the Live tab.
+    if (tab != ChannelsTab.LIVE) {
+        VodScreen(playlistId, tab, vodAvailable) { tab = it }
         return
     }
 
@@ -121,9 +121,7 @@ fun ChannelsScreen(playlistId: String) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (vodAvailable) {
-                VodTabRow(selected = tab, onSelect = { tab = it })
-            }
+            VodTabRow(selected = tab, showVodTabs = vodAvailable, onSelect = { tab = it })
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

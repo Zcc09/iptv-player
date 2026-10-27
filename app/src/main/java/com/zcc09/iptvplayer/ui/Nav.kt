@@ -10,6 +10,8 @@ sealed class Screen {
     data class Player(val channel: Channel, val urlOverride: String? = null) : Screen()
     /** Seasons/episodes of one series. */
     data class Series(val playlistId: String, val seriesId: Int, val title: String) : Screen()
+    /** 10-foot recordings list (TV home tile); phones use the Recordings tab. */
+    data object Recordings : Screen()
     data object Settings : Screen()
 }
 
