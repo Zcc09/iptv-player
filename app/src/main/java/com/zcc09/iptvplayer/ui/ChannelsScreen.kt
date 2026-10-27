@@ -39,8 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,7 +51,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.Repo
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +93,18 @@ fun ChannelsScreen(playlistId: String) {
                     it.group.contains(query, ignoreCase = true)
             }
             .toList()
+    }
+
+    // EPG: refresh the guide when stale and tick a clock so now-playing
+    // titles advance on their own (M3U playlists never carry a guide).
+    val showNowPlaying by Repo.epgNowPlaying.collectAsState()
+    var epgNowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(playlistId) {
+        playlist?.let { EpgStore.refresh(it) }
+        while (true) {
+            delay(60_000)
+            epgNowSec = System.currentTimeMillis() / 1000
+        }
     }
 
     val refreshing = busy.contains(playlistId)
@@ -206,9 +222,16 @@ fun ChannelsScreen(playlistId: String) {
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     items(shown, key = { it.id }) { channel ->
+                        val nowPlaying =
+                            if (showNowPlaying && channel.streamId > 0) {
+                                EpgStore.nowProgram(playlistId, channel.streamId, epgNowSec)?.title
+                            } else {
+                                null
+                            }
                         ChannelRow(
                             channel = channel,
                             favorite = favorites.contains(channel.id),
+                            nowPlaying = nowPlaying,
                             onToggleFavorite = { Repo.toggleFavorite(channel.id) },
                             onPlay = { Nav.push(Screen.Player(channel)) }
                         )
@@ -223,6 +246,7 @@ fun ChannelsScreen(playlistId: String) {
 private fun ChannelRow(
     channel: Channel,
     favorite: Boolean,
+    nowPlaying: String? = null,
     onToggleFavorite: () -> Unit,
     onPlay: () -> Unit
 ) {
@@ -242,6 +266,14 @@ private fun ChannelRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+            nowPlaying?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
             if (channel.group.isNotBlank()) {
                 Text(
                     channel.group,

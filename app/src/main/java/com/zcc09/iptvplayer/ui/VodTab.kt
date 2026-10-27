@@ -67,10 +67,11 @@ internal fun vodItemKey(playlistId: String, kind: MediaKind, categoryId: String)
     "$playlistId|${kind.name}|$categoryId"
 
 /** Tabs of the channels screen row: Live, (Movies, Shows for VOD accounts), Recordings. */
-internal enum class ChannelsTab { LIVE, MOVIE, SERIES, RECORDINGS }
+internal enum class ChannelsTab { LIVE, GUIDE, MOVIE, SERIES, RECORDINGS }
 
 private fun ChannelsTab.label(): String = when (this) {
     ChannelsTab.LIVE -> "Live"
+    ChannelsTab.GUIDE -> "Guide"
     ChannelsTab.MOVIE -> "Movies"
     ChannelsTab.SERIES -> "Shows"
     ChannelsTab.RECORDINGS -> "Recordings"
@@ -87,6 +88,7 @@ internal fun VodTabRow(selected: ChannelsTab, showVodTabs: Boolean, onSelect: (C
     val tabs = buildList {
         add(ChannelsTab.LIVE)
         if (showVodTabs) {
+            add(ChannelsTab.GUIDE)
             add(ChannelsTab.MOVIE)
             add(ChannelsTab.SERIES)
         }
@@ -120,6 +122,7 @@ internal fun VodScreen(
                     Text(
                         when (tab) {
                             ChannelsTab.RECORDINGS -> "Recordings"
+                            ChannelsTab.GUIDE -> "Guide"
                             else -> playlist?.name
                                 ?: if (tab == ChannelsTab.MOVIE) "Movies" else "Shows"
                         }
@@ -139,10 +142,10 @@ internal fun VodScreen(
                 .padding(padding)
         ) {
             VodTabRow(selected = tab, showVodTabs = showVodTabs, onSelect = onTab)
-            if (tab == ChannelsTab.RECORDINGS) {
-                RecordingsTabScreen()
-            } else {
-                VodTab(playlistId, tab.mediaKind())
+            when {
+                tab == ChannelsTab.RECORDINGS -> RecordingsTabScreen()
+                tab == ChannelsTab.GUIDE -> GuideScreen(playlistId)
+                else -> VodTab(playlistId, tab.mediaKind())
             }
         }
     }
