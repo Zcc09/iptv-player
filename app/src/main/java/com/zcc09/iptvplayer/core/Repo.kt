@@ -33,6 +33,8 @@ object Repo {
     private const val KEY_UI_MODE = "ui_mode"
     private const val KEY_TV_SETUP_DISMISSED = "tv_setup_dismissed"
     private const val KEY_NAV_HINTS = "show_nav_hints"
+    private const val KEY_EPG_WINDOW_HOURS = "epg_window_hours"
+    private const val KEY_EPG_NOW_PLAYING = "epg_now_playing"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json {
@@ -98,6 +100,9 @@ object Repo {
         }.getOrDefault(AppUiMode.AUTO)
         _tvSetupDismissed.value = p.getBoolean(KEY_TV_SETUP_DISMISSED, false)
         _showNavHints.value = p.getBoolean(KEY_NAV_HINTS, true)
+        val window = p.getInt(KEY_EPG_WINDOW_HOURS, 4)
+        _epgWindowHours.value = if (window in setOf(2, 4, 6)) window else 4
+        _epgNowPlaying.value = p.getBoolean(KEY_EPG_NOW_PLAYING, true)
         loadPlaylists()
     }
 
@@ -203,6 +208,30 @@ object Repo {
         _showNavHints.value = show
         prefs?.edit()?.putBoolean(KEY_NAV_HINTS, show)?.apply()
     }
+
+    // ---------------------------------------------------------------- guide
+    // EPG settings: how far ahead the guide window reaches, and whether the
+    // channel list shows the current programme under each channel name.
+
+    private val _epgWindowHours = MutableStateFlow(4)
+    val epgWindowHours: StateFlow<Int> = _epgWindowHours.asStateFlow()
+
+    private val _epgNowPlaying = MutableStateFlow(true)
+    val epgNowPlaying: StateFlow<Boolean> = _epgNowPlaying.asStateFlow()
+
+    fun setEpgWindowHours(hours: Int) {
+        _epgWindowHours.value = if (hours in setOf(2, 4, 6)) hours else 4
+        prefs?.edit()?.putInt(KEY_EPG_WINDOW_HOURS, _epgWindowHours.value)?.apply()
+    }
+
+    fun setEpgNowPlaying(show: Boolean) {
+        _epgNowPlaying.value = show
+        prefs?.edit()?.putBoolean(KEY_EPG_NOW_PLAYING, show)?.apply()
+    }
+
+    /** Cache directory for non-essential data (EPG snapshots); created on demand. */
+    val cacheDir: File
+        get() = File(app?.cacheDir ?: File("."), "cache")
 
     fun isFavorite(channelId: String): Boolean = _favorites.value.contains(channelId)
 

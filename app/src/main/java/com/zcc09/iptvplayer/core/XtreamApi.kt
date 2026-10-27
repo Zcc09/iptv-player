@@ -50,6 +50,19 @@ class XtreamApi(
         return sb.toString()
     }
 
+    // ------------------------------------------------------------------ EPG
+    // The full programme guide as raw XML (`get_full_epg` with a date range).
+    // Panels that do not serve EPG (e.g. Dispatcharr) answer 404, which
+    // [Http.getText] surfaces as [java.io.IOException]; callers treat any
+    // failure as an explicit "no guide" state.
+
+    fun fullEpgUrl(startDate: String, endDate: String): String =
+        apiUrl("get_full_epg", "start_date=$startDate&end_date=$endDate")
+
+    /** Fetch the raw EPG XML for [startDate]..[endDate] (yyyy-MM-dd, local time). */
+    fun fullEpg(startDate: String, endDate: String): String =
+        Http.getText(fullEpgUrl(startDate, endDate), ua = userAgent)
+
     // ------------------------------------------------------------------ VOD
     // Catalogues get big: a real panel serves tens of thousands of films in one
     // 38 MB response, so the app never lists "all films" - it always asks for one

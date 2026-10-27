@@ -69,6 +69,25 @@ data class ParsedM3u(
 enum class MediaKind { LIVE, MOVIE, SERIES }
 
 /**
+ * Tabs of the channels screen (Live, Guide, Movies, Shows). The VOD tabs map
+ * onto [MediaKind]; [GUIDE] is the EPG guide, which has no VOD counterpart.
+ */
+enum class ChannelTab(val mediaKind: MediaKind? = null) {
+    LIVE(MediaKind.LIVE),
+    GUIDE,
+    MOVIES(MediaKind.MOVIE),
+    SERIES(MediaKind.SERIES);
+
+    companion object {
+        fun fromMedia(kind: MediaKind): ChannelTab = when (kind) {
+            MediaKind.MOVIE -> MOVIES
+            MediaKind.SERIES -> SERIES
+            MediaKind.LIVE -> LIVE
+        }
+    }
+}
+
+/**
  * A VOD category. Panels expose hundreds of these (the test server has 443 film
  * and 381 series categories), so the UI lists them lazily rather than all at once.
  */
