@@ -116,7 +116,10 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          # -memory matters: with the default AVD size, lowmemorykiller reaped the
+          # app mid-suite (1.5 GB RSS + 0.6-1.2 GB swap) and every step after that
+          # found the launcher in front, which looked like failing features.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 4096
           script: bash .github/e2e.sh
         env:
           # Test-panel credentials live in secrets, never in the repo.

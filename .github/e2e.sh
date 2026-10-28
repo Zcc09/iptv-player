@@ -112,7 +112,7 @@ ensure_foreground() { # [navigation action to use when relaunching, e.g. openxc]
     case "$dump" in
       *com.zcc09.iptvplayer*) return 0 ;;
       *"hierchary dumped"*|*"hierarchy dumped"*)
-        echo "     (another app is on screen; relaunching via '$action', attempt $tries)"
+        echo "     (another app is on screen; relaunching via '$action', attempt $tries; MemAvailable $(timeout 20 adb shell cat /proc/meminfo 2>/dev/null | awk '/MemAvailable/{print $2" kB"}' | tr -d '\r'))"
         run_action "$action" 20
         tries=$((tries + 1))
         ;;
@@ -179,6 +179,10 @@ for attempt in 1 2; do
   sleep 5
 done
 if [ "$INSTALLED" -eq 1 ]; then pass "installed $APK"; else fail "could not install $APK"; fi
+# Free RAM before the suite runs: on a small AVD lowmemorykiller reaps the app
+# mid-step and every later assertion blames the feature instead of the emulator.
+timeout 60 adb shell am kill-all > /dev/null 2>&1 || true
+echo "     (MemAvailable: $(timeout 20 adb shell cat /proc/meminfo 2>/dev/null | awk '/MemAvailable/{print $2" kB"}' | tr -d '\r'))"
 timeout 60 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1 || true
 timeout 60 adb shell wm dismiss-keyguard > /dev/null 2>&1 || true
 timeout 60 adb shell input keyevent KEYCODE_WAKEUP > /dev/null 2>&1 || true
