@@ -99,22 +99,21 @@ run_action() { # action, seconds to wait, [extra e2e_index]
 
 # A UI step must not fail just because an earlier step left the app dead: if the
 # launcher or a system window holds focus, relaunch before tapping.
-ensure_foreground() { # [action to re-run after a relaunch, e.g. openxc]
-  local focus
-  focus=$(timeout 30 adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | tr -d '\r' | sed 's/^ *//')
-  case "$focus" in
-    *iptvplayer*) return 0 ;;
-  esac
-  echo "     (app not in front: ${focus:-unknown}; relaunching)"
-  timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
-  timeout 90 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || true
-  sleep 10
-  # A relaunch lands on the playlists root, so any navigation the step relied on
-  # has to be redone or the tab it wants is simply not on screen.
-  if [ -n "${1:-}" ]; then
-    echo "     (re-running '$1' after the relaunch)"
-    run_action "$1" 20
-  fi
+ensure_foreground() { # [action to run instead of 'dump' when relaunching, e.g. openxc]
+  local action="${1:-dump}" tries=1 focus
+  while [ "$tries" -le 3 ]; do
+    focus=$(timeout 30 adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | tr -d '\r' | sed 's/^ *//')
+    case "$focus" in
+      *iptvplayer*) return 0 ;;
+    esac
+    echo "     (app not in front: ${focus:-unknown}; relaunching via '$action', attempt $tries)"
+    # Reuse run_action: a bare `am start` did not bring the app back after a heavy
+    # playback step, while every run_action-launched step does.
+    run_action "$action" 20
+    tries=$((tries + 1))
+  done
+  echo "     (warning: the app is still not the focused window after 3 launches)"
+  return 0
 }
 
 # Screenshots for the store listing (Play wants 2-8 phone shots, >=320px).
@@ -230,58 +229,6 @@ fi
 assert_log "E2E_VOD_EPISODE_URL https?://.+/series/.+\.[a-z0-9]+" "episode playback url built"
 show_log "E2E_VOD_(SHOW|EPISODE)"
 
-step "VOD playback (first film of the first non-empty category)"
-run_action playvod 90
-assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback requested"
-# A rendered frame depends on the panel file (these decode in software on the
-# emulator); the app's own responsibility is that the right URL was built, the
-# Matroska mime applied, and the player actually started reading data. Frame
-# rendering itself is asserted on the HLS stream, which uses the same player.
-if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
-  echo "     (no rendered frame yet - retrying the film once)"
-  run_action playvod 90
-fi
-if echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
-  pass "the film actually renders video"
-elif echo "$LOG" | grep -qE "PLAYBACK_BUFFERING .*/movie/"; then
-  pass "the player opened and buffered the film (rendering is asserted on the HLS stream)"
-else
-  fail "the film never reached the player (no OPENING/BUFFERING line for its url)"
-fi
-show_log "E2E_VOD_PLAY|PLAYBACK_"
-
-step "VOD playback: an episode of the first series (shows, not just films)"
-# Films live at /movie/... and episodes at /series/..., so a film-only check would
-# leave half the feature unproven.
-run_action playvodep 150
-assert_log "E2E_VOD_PLAY_EPISODE .*series=.+ S[0-9]+E[0-9]+ .*url=https?://" "episode playback requested"
-assert_log "PLAYBACK_OPENING .*mime=video/x-matroska" "the episode opened as Matroska, not raw TS"
-if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
-  echo "     (no rendered frame yet - retrying the episode once)"
-  run_action playvodep 150
-fi
-if echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
-  pass "the episode actually renders video"
-elif echo "$LOG" | grep -qE "PLAYBACK_BUFFERING .*/series/"; then
-  pass "the player opened and buffered the episode (rendering is asserted on the HLS stream)"
-else
-  fail "the episode never reached the player (no OPENING/BUFFERING line for its url)"
-fi
-show_log "E2E_VOD_PLAY_EPISODE|PLAYBACK_"
-
-step "Resume: a title left part-way is remembered and picked up again"
-run_action history 14
-if echo "$LOG" | grep -qE "E2E HISTORY count=[1-9][0-9]*"; then
-  pass "watch progress was saved to disk"
-else
-  echo "     (nothing recorded - the emulator buffered the film without playing it long enough)"
-  run_action historyseed 20
-  assert_log "E2E HISTORY count=[1-9][0-9]*" "watch progress was saved to disk (seeded position)"
-fi
-run_action playvod 90
-assert_log "E2E RESUME key=movie:[^ ]+ seek=[1-9][0-9]*" "the player resumed where the title was left"
-show_log "E2E HISTORY|E2E RESUME"
-
 step "VOD UI: the Movies tab, driven the way a viewer taps it"
 # The probes above call the repository directly; this taps the real tab in the UI.
 # Only the shape of the count line is asserted, never the catalogue's own titles,
@@ -323,6 +270,58 @@ else
   fail "the guide never reached a definite EPG state (no E2E EPG line after tapping)"
 fi
 show_log "E2E EPG"
+
+step "VOD playback (first film of the first non-empty category)"
+run_action playvod 90
+assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback requested"
+# A rendered frame depends on the panel file (these decode in software on the
+# emulator); the app's own responsibility is that the right URL was built, the
+# Matroska mime applied, and the player actually started reading data. Frame
+# rendering itself is asserted on the HLS stream, which uses the same player.
+if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  echo "     (no rendered frame yet - retrying the film once)"
+  run_action playvod 90
+fi
+if echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  pass "the film actually renders video"
+elif echo "$LOG" | grep -qE "PLAYBACK_BUFFERING .*/movie/"; then
+  pass "the player opened and buffered the film (rendering is asserted on the HLS stream)"
+else
+  fail "the film never reached the player (no OPENING/BUFFERING line for its url)"
+fi
+show_log "E2E_VOD_PLAY|PLAYBACK_"
+
+step "VOD playback: an episode of the first series (shows, not just films)"
+# Films live at /movie/... and episodes at /series/..., so a film-only check would
+# leave half the feature unproven.
+run_action playvodep 150
+assert_log "E2E_VOD_PLAY_EPISODE .*series=.+ S[0-9]+E[0-9]+ .*url=https?://" "episode playback requested"
+assert_log "PLAYBACK_OPENING .*mime=video/x-matroska" "the episode opened as Matroska, not raw TS"
+if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  echo "     (no rendered frame yet - retrying the episode once)"
+  run_action playvodep 150
+fi
+if echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  pass "the episode actually renders video"
+elif echo "$LOG" | grep -qE "PLAYBACK_BUFFERING .*/series/"; then
+  pass "the player opened and buffered the episode (rendering is asserted on the HLS stream)"
+else
+  fail "the episode never reached the player (no OPENING/BUFFERING line for its url)"
+fi
+show_log "E2E_VOD_PLAY_EPISODE|PLAYBACK_"
+
+step "Resume: a title left part-way is remembered and picked up again"
+run_action history 14
+if ! echo "$LOG" | grep -qE "E2E HISTORY count=[1-9][0-9]*"; then
+  echo "     (nothing recorded - the emulator buffered the film without playing it long enough)"
+  run_action historyseed 20
+  assert_log "E2E HISTORY_SEEDED key=movie:" "a mid-film position was seeded for the resume check"
+  run_action history 14
+fi
+assert_log "E2E HISTORY count=[1-9][0-9]*" "watch progress was saved to disk"
+run_action playvod 90
+assert_log "E2E RESUME key=movie:[^ ]+ seek=[1-9][0-9]*" "the player resumed where the title was left"
+show_log "E2E HISTORY|E2E RESUME"
 
 step "Refresh all playlists (auto-refresh code path)"
 run_action refresh 55
