@@ -87,6 +87,10 @@ run_action() { # action, seconds to wait, [extra e2e_index]
   timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
   local extra=()
   [ -n "${3:-}" ] && extra=(-e e2e_index "$3")
+  # Test-panel credentials come from Actions secrets; extras are space-free so
+  # adb cannot split them on-device.
+  [ -n "${E2E_XC_USER:-}" ] && extra+=(-e e2e_user "$E2E_XC_USER")
+  [ -n "${E2E_XC_PASS:-}" ] && extra+=(-e e2e_pass "$E2E_XC_PASS")
   timeout 90 adb shell am start -W -n "$ACT" -e e2e "$1" "${extra[@]}" > /dev/null 2>&1 \
     || echo "     (am start returned non-zero for '$1')"
   sleep "$2"
@@ -159,6 +163,11 @@ assert_log "SEED_OK m3u=[1-9][0-9]*" "M3U playlist link returned channels"
 assert_log "SEED_OK .*xc=[1-9][0-9]*" "Xtream account returned channels"
 assert_log "SEED_M3U_FIRST" "first M3U channel parsed"
 assert_log "SEED_XC_FIRST" "first Xtream channel parsed with a stream url"
+# Only meaningful on CI, where the credentials come from Actions secrets: this
+# proves the secret -> extra -> app path works rather than the source fallback.
+if [ -n "${E2E_XC_USER:-}" ]; then
+  assert_log "E2E_CREDS source=extras" "test credentials were supplied by Actions secrets"
+fi
 show_log "SEED_"
 
 step "Xtream (XC) API directly: auth, categories, live streams"

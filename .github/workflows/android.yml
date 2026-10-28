@@ -118,6 +118,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash .github/e2e.sh
+        env:
+          # Test-panel credentials live in secrets, never in the repo.
+          E2E_XC_USER: ${{ secrets.E2E_XC_USER }}
+          E2E_XC_PASS: ${{ secrets.E2E_XC_PASS }}
 
       - name: Emulator logcat
         if: always()

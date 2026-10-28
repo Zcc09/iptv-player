@@ -35,8 +35,13 @@ object E2e : E2eHandler {
 
     private const val M3U_URL = "https://tv.mojangle.net/output/m3u"
     private const val XC_URL = "https://tv.mojangle.net/output/m3u"
-    private const val XC_USER = "Family"
-    private const val XC_PASS = "123"
+    // The CI panel's test account. Real values arrive from Actions secrets as
+    // intent extras (e2e_user / e2e_pass) so a rotated password never has to be
+    // edited into a public repo; these fallbacks keep local/ad-hoc runs working.
+    private const val XC_USER_FALLBACK = "Family"
+    private const val XC_PASS_FALLBACK = "123"
+    private var xcUser: String = XC_USER_FALLBACK
+    private var xcPass: String = XC_PASS_FALLBACK
 
     /** Small, low-bitrate HLS stream used to prove real decode + render on an emulator. */
     private const val TEST_HLS =
@@ -57,7 +62,13 @@ object E2e : E2eHandler {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun handle(activity: Activity, action: String, extras: Map<String, String>) {
-        Logx.i("E2E_ACTION $action extras=$extras")
+        Logx.i("E2E_ACTION $action extras=${extras.keys}")
+        // Credentials ride in as extras from the suite (Actions secrets); a
+        // per-action secret never becomes a constant in a public source file.
+        extras["e2e_user"]?.takeIf { it.isNotBlank() }?.let { xcUser = it }
+        extras["e2e_pass"]?.takeIf { it.isNotBlank() }?.let { xcPass = it }
+        if (extras["e2e_user"]?.isNotBlank() == true) Logx.i("E2E_CREDS source=extras")
+        else Logx.i("E2E_CREDS source=default")
         when (action.lowercase()) {
             "seed" -> scope.launch { seed() }
             "refresh" -> scope.launch {
@@ -445,8 +456,8 @@ object E2e : E2eHandler {
                 name = "CI Xtream account",
                 type = PlaylistType.XTREAM,
                 url = XC_URL,
-                username = XC_USER,
-                password = XC_PASS,
+                username = xcUser,
+                password = xcPass,
                 autoRefresh = true,
                 refreshIntervalMinutes = 15
             )
@@ -489,7 +500,7 @@ object E2e : E2eHandler {
 
     private suspend fun probeXtream() {
         try {
-            val api = XtreamApi(XC_URL, XC_USER, XC_PASS, Repo.userAgent)
+            val api = XtreamApi(XC_URL, xcUser, xcPass, Repo.userAgent)
             Logx.i("XC_BASE ${api.base}")
             val auth = api.auth()
             val categories = api.liveCategories()
