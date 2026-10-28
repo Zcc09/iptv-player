@@ -99,20 +99,23 @@ run_action() { # action, seconds to wait, [extra e2e_index]
 
 # A UI step must not fail just because an earlier step left the app dead: if the
 # launcher or a system window holds focus, relaunch before tapping.
-ensure_foreground() { # [action to run instead of 'dump' when relaunching, e.g. openxc]
-  local action="${1:-dump}" tries=1 focus
+ensure_foreground() { # [navigation action to use when relaunching, e.g. openxc]
+  # Do NOT trust `dumpsys window | grep mCurrentFocus` here: on this headless
+  # emulator it reports the launcher while the app is plainly on screen (a
+  # uiautomator dump showed the player while focus said NexusLauncher), so
+  # gating on it killed healthy sessions and threw away their navigation.
+  # Ask uiautomator what is actually rendered instead.
+  local action="${1:-dump}" tries=1 dump
   while [ "$tries" -le 3 ]; do
-    focus=$(timeout 30 adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | tr -d '\r' | sed 's/^ *//')
-    case "$focus" in
-      *iptvplayer*) return 0 ;;
+    dump=$(timeout 60 adb shell uiautomator dump /sdcard/fg.xml > /dev/null 2>&1; timeout 30 adb shell cat /sdcard/fg.xml 2>/dev/null)
+    case "$dump" in
+      *com.zcc09.iptvplayer*) return 0 ;;
     esac
-    echo "     (app not in front: ${focus:-unknown}; relaunching via '$action', attempt $tries)"
-    # Reuse run_action: a bare `am start` did not bring the app back after a heavy
-    # playback step, while every run_action-launched step does.
+    echo "     (app UI not on screen; relaunching via '$action', attempt $tries)"
     run_action "$action" 20
     tries=$((tries + 1))
   done
-  echo "     (warning: the app is still not the focused window after 3 launches)"
+  echo "     (warning: the app's UI is still not on screen after 3 launches)"
   return 0
 }
 
