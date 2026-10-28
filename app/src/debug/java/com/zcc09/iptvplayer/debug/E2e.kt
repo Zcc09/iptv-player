@@ -580,8 +580,21 @@ object E2e : E2eHandler {
             val playlist = Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
             if (playlist == null) { Logx.w("E2E EPG_NO_XC"); return }
             EpgStore.refresh(playlist)
-            val cache = EpgStore.flow(playlist.id).value
-            Logx.i("E2E EPG_SNAAPSHOT streams=${cache?.programs?.size ?: 0} missing=${cache?.missing ?: true}")
+            // refresh() publishes through a coroutine, so give the flow a moment.
+            var cache = EpgStore.flow(playlist.id).value
+            var waited = 0
+            while ((cache == null || cache.programs.isEmpty()) && waited < 20_000) {
+                delay(1_000)
+                waited += 1_000
+                cache = EpgStore.flow(playlist.id).value
+            }
+            val streams = cache?.programs?.size ?: 0
+            val programs = cache?.programs?.values?.sumOf { it.size } ?: 0
+            Logx.i("E2E EPG_STREAMS streams=$streams programs=$programs missing=${cache?.missing ?: true}")
+            val sample = cache?.programs?.entries?.firstOrNull { it.value.isNotEmpty() }
+            if (sample != null) {
+                Logx.i("E2E EPG_SAMPLE channel=${sample.key} title=${sample.value.first().title}")
+            }
         } catch (t: Throwable) { Logx.e("E2E EPG_PROBE_FAILED", t) }
     }
 
