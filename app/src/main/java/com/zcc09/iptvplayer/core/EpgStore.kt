@@ -72,13 +72,28 @@ object EpgStore {
         return nowMs - cache.fetchedAt > STALE_AFTER_MS
     }
 
-    /** The program airing for [streamId] at [nowSec] (unix seconds), if any. */
-    fun nowProgram(playlistId: String, streamId: Int, nowSec: Long): EpgProgram? =
-        cache(playlistId)?.programs?.get(streamId.toString())?.let { EpgParser.nowAt(it, nowSec) }
+    /** The program airing for [channel] at [nowSec] (unix seconds), if any. */
+    fun nowProgram(playlistId: String, channel: Channel, nowSec: Long): EpgProgram? =
+        programsOf(playlistId, channel)?.let { EpgParser.nowAt(it, nowSec) }
 
-    /** The next program for [streamId] starting after [nowSec], if any. */
-    fun nextProgram(playlistId: String, streamId: Int, nowSec: Long): EpgProgram? =
-        cache(playlistId)?.programs?.get(streamId.toString())?.let { EpgParser.nextAt(it, nowSec) }
+    /** The next program for [channel] starting after [nowSec], if any. */
+    fun nextProgram(playlistId: String, channel: Channel, nowSec: Long): EpgProgram? =
+        programsOf(playlistId, channel)?.let { EpgParser.nextAt(it, nowSec) }
+
+    /** Programs for [channel] in a snapshot, or null when the guide has none. */
+    fun programsOf(cache: EpgCache?, channel: Channel): List<EpgProgram>? {
+        val c = cache ?: return null
+        // Guides are keyed by the guide's own channel id (Xtream's
+        // `epg_channel_id`, M3U's tvg-id). Stream id is only a fallback: on a
+        // Dispatcharr panel those two differ for every channel but the first two.
+        if (channel.epgId.isNotEmpty()) {
+            c.programs[channel.epgId]?.takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return c.programs[channel.streamId.toString()]?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun programsOf(playlistId: String, channel: Channel): List<EpgProgram>? =
+        programsOf(cache(playlistId), channel)
 
     /**
      * Fetch today 00:00 through tomorrow 23:59 (device local time) from the
@@ -99,9 +114,17 @@ object EpgStore {
                     Repo.userAgent
                 )
                 val today = LocalDate.now()
-                val xml = runCatching {
-                    api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
-                }.getOrNull()
+                // XMLTV first: it is the endpoint self-hosted panels actually
+                // serve. `get_full_epg` remains as the fallback for XC panels
+                // that implement it and not /xmltv.php.
+                val xmltvXml = runCatching { api.xmltv() }.getOrNull()
+                val xml = if (!xmltvXml.isNullOrBlank() && xmltvXml.contains("<programme")) {
+                    xmltvXml
+                } else {
+                    runCatching {
+                        api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
+                    }.getOrNull()
+                }
                 val programs = xml?.let { runCatching { EpgParser.parse(it) }.getOrNull() } ?: emptyMap()
                 EpgCache(
                     fetchedAt = System.currentTimeMillis(),

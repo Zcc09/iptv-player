@@ -246,8 +246,9 @@ else
 fi
 
 step "Guide UI: the EPG tab, driven the way a viewer taps it"
-# The CI server may or may not publish an EPG, so both definite outcomes are
-# accepted; what must not happen is silence (a crash or a swallowed error).
+# The CI panel publishes a real XMLTV guide (`/xmltv.php`), so the guide must
+# render programmes, not degrade. Only silence (crash / swallowed error) or a
+# regression back to the no-EPG state fails this step.
 if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
   pass "tapped the Guide tab"
 else
@@ -255,10 +256,10 @@ else
 fi
 sleep 25
 refresh_log
-if echo "$LOG" | grep -qE "E2E EPG programs=[0-9]+ channels=[0-9]+"; then
-  pass "the guide rendered its EPG data"
+if echo "$LOG" | grep -qE "E2E EPG programs=[1-9][0-9]* channels=[1-9][0-9]*"; then
+  pass "the guide rendered programmes from the panel's XMLTV feed"
 elif echo "$LOG" | grep -q "E2E EPG_MISSING"; then
-  pass "the guide reached the explicit no-EPG state (server publishes no guide)"
+  fail "the guide fell back to the no-EPG state although the panel publishes /xmltv.php"
 else
   fail "the guide never reached a definite EPG state (no E2E EPG line after tapping)"
 fi

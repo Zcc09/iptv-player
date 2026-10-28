@@ -138,8 +138,8 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
         var announced = false
         while (true) {
             val now = System.currentTimeMillis() / 1000
-            val cur = EpgStore.nowProgram(channel.playlistId, channel.streamId, now)
-            val nxt = EpgStore.nextProgram(channel.playlistId, channel.streamId, now)
+            val cur = EpgStore.nowProgram(channel.playlistId, channel, now)
+            val nxt = EpgStore.nextProgram(channel.playlistId, channel, now)
             epgNowNext = cur?.let {
                 it.title to nxt?.let { "Next: ${it.title} ${EpgParser.formatHm(it.startEpochSec)}" }
             }

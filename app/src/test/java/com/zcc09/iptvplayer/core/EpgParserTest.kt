@@ -109,4 +109,57 @@ class EpgParserTest {
         assertEquals("Second <Show>", EpgParser.nowAt(programs, 1761133200L)?.title)
         assertNull(EpgParser.nowAt(programs, 1761129599L))
     }
+
+    // ------------------------------------------------------------------ XMLTV
+    // Dispatcharr and most self-hosted panels publish standard XMLTV on
+    // /xmltv.php instead of the legacy get_full_epg document above, and they
+    // key programmes by channel id rather than stream id.
+
+    private val xmltvSample =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv generator-info-name=\"Dispatcharr\">" +
+            "<channel id=\"3\"><display-name>Dubai TV</display-name></channel>" +
+            "<programme start=\"20261028110000 +0000\" stop=\"20261028113000 +0000\" channel=\"3\">" +
+            "<title lang=\"ar\">Akhbar</title><desc>News bulletin</desc></programme>" +
+            "<programme start=\"20261028113000 +0400\" stop=\"20261028120000 +0400\" channel=\"3\">" +
+            "<title><![CDATA[Film & Fun]]></title><icon src=\"https://x/y.png\"/></programme>" +
+            "<programme start=\"20261028110000\" stop=\"20261028120000\" channel=\"4\">" +
+            "<title>No offset show</title></programme>" +
+            "<programme start=\"20261028120000 +0000\" stop=\"20261028110000 +0000\" channel=\"5\">" +
+            "<title>Inverted</title></programme>" +
+            "</tv>"
+
+    @Test
+    fun `xmltv programmes group by the channel attribute`() {
+        val map = EpgParser.parse(xmltvSample)
+        assertEquals(setOf("3", "4"), map.keys)
+        assertEquals(2, map["3"]!!.size)
+        assertEquals(1, map["4"]!!.size)
+    }
+
+    @Test
+    fun `xmltv timestamps honour the explicit offset and unwrap cdata`() {
+        // Sorted by start, so the +0400 entry (07:30Z) lands before the +0000
+        // one (11:00Z) - look up by title rather than by index.
+        val byTitle = EpgParser.parse(xmltvSample)["3"]!!.associateBy { it.title }
+        assertEquals(1793185200L, byTitle.getValue("Akhbar").startEpochSec) // 11:00 +0000
+        assertEquals(1793172600L, byTitle.getValue("Film & Fun").startEpochSec) // 11:30 +0400 = 07:30Z
+        assertEquals("News bulletin", byTitle.getValue("Akhbar").description)
+        assertEquals("https://x/y.png", byTitle.getValue("Film & Fun").iconUrl)
+        // and the schedules really are ordered by absolute time
+        val starts = EpgParser.parse(xmltvSample)["3"]!!.map { it.startEpochSec }
+        assertEquals(starts.sorted(), starts)
+    }
+
+    @Test
+    fun `xmltv without an offset is utc and inverted entries are dropped`() {
+        val map = EpgParser.parse(xmltvSample)
+        assertEquals(1793185200L, map["4"]!![0].startEpochSec)
+        assertNull(map["5"])
+    }
+
+    @Test
+    fun `xmltv takes precedence but the legacy dialect still parses`() {
+        assertTrue(EpgParser.parse(xmltvSample).isNotEmpty())
+        assertEquals(setOf("12", "77"), EpgParser.parse(sample).keys)
+    }
 }

@@ -224,7 +224,7 @@ fun ChannelsScreen(playlistId: String) {
                     items(shown, key = { it.id }) { channel ->
                         val nowPlaying =
                             if (showNowPlaying && channel.streamId > 0) {
-                                EpgStore.nowProgram(playlistId, channel.streamId, epgNowSec)?.title
+                                EpgStore.nowProgram(playlistId, channel, epgNowSec)?.title
                             } else {
                                 null
                             }

@@ -59,6 +59,20 @@ class XtreamApi(
     fun fullEpgUrl(startDate: String, endDate: String): String =
         apiUrl("get_full_epg", "start_date=$startDate&end_date=$endDate")
 
+    /**
+     * The standard XMLTV endpoint. Self-hosted panels (Dispatcharr, Threadfin,
+     * most XC forks) do not implement `get_full_epg` — they answer it with a
+     * bare `user_info` document — and publish the whole guide here instead.
+     */
+    fun xmltvUrl(): String =
+        StringBuilder(base)
+            .append("/xmltv.php?username=").append(enc(username))
+            .append("&password=").append(enc(password))
+            .toString()
+
+    /** Fetch the panel's XMLTV guide (no date range: panels decide the window). */
+    fun xmltv(): String = Http.getText(xmltvUrl(), ua = userAgent)
+
     /** Fetch the raw EPG XML for [startDate]..[endDate] (yyyy-MM-dd, local time). */
     fun fullEpg(startDate: String, endDate: String): String =
         Http.getText(fullEpgUrl(startDate, endDate), ua = userAgent)

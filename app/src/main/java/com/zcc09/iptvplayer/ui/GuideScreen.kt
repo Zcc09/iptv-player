@@ -229,7 +229,7 @@ private fun GuideGrid(
                 items(channels, key = { it.id }) { channel ->
                     GuideRow(
                         channel = channel,
-                        programs = cache.programs[channel.streamId.toString()].orEmpty(),
+                        programs = EpgStore.programsOf(cache, channel).orEmpty(),
                         windowStartSec = windowStartSec,
                         windowMs = windowMs,
                         nowSec = nowSec,
