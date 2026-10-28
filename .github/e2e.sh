@@ -116,6 +116,8 @@ ensure_foreground() { # [navigation action to use when relaunching, e.g. openxc]
     tries=$((tries + 1))
   done
   echo "     (warning: the app's UI is still not on screen after 3 launches)"
+  echo "     --- app log, last 30 lines (why it is gone) ---"
+  timeout 60 adb logcat -d -v time IPTV_E2E:V IPTVPlayer:V AndroidRuntime:E '*:S' 2>/dev/null | tail -30 | sed 's/^/     | /'
   return 0
 }
 
@@ -157,6 +159,9 @@ tvexit() {
 }
 
 step "Install debug APK"
+# Keep the whole run's log in the ring buffer: the default size evicted the app's
+# own log within minutes, which made a mid-run death undiagnosable.
+timeout 30 adb logcat -G 32M > /dev/null 2>&1 || true
 INSTALLED=0
 for attempt in 1 2; do
   if timeout 300 adb install -r "$APK" > /dev/null 2>&1; then INSTALLED=1; break; fi
@@ -191,6 +196,27 @@ if [ -n "${E2E_XC_USER:-}" ]; then
   assert_log "E2E_CREDS source=extras" "test credentials were supplied by Actions secrets"
 fi
 show_log "SEED_"
+
+step "Guide UI: the EPG tab, driven the way a viewer taps it"
+# The CI panel publishes a real XMLTV guide (`/xmltv.php`), so the guide must
+# render programmes, not degrade. Only silence (crash / swallowed error) or a
+# regression back to the no-EPG state fails this step.
+ensure_foreground openxc
+if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
+  pass "tapped the Guide tab"
+else
+  fail "the Guide tab was not on screen for an Xtream playlist"
+fi
+sleep 25
+refresh_log
+if echo "$LOG" | grep -qE "E2E EPG programs=[1-9][0-9]* channels=[1-9][0-9]*"; then
+  pass "the guide rendered programmes from the panel's XMLTV feed"
+elif echo "$LOG" | grep -q "E2E EPG_MISSING"; then
+  fail "the guide fell back to the no-EPG state although the panel publishes /xmltv.php"
+else
+  fail "the guide never reached a definite EPG state (no E2E EPG line after tapping)"
+fi
+show_log "E2E EPG"
 
 step "Xtream (XC) API directly: auth, categories, live streams"
 run_action xc 25
@@ -252,27 +278,6 @@ else
   fail "the Movies tab did not render a list (no 'N of N in <category>' line)"
   echo "     text-bearing nodes on screen: $(echo "$VOD_UI" | grep -o 'text="[^"]*"' | wc -l)"
 fi
-
-step "Guide UI: the EPG tab, driven the way a viewer taps it"
-# The CI panel publishes a real XMLTV guide (`/xmltv.php`), so the guide must
-# render programmes, not degrade. Only silence (crash / swallowed error) or a
-# regression back to the no-EPG state fails this step.
-ensure_foreground openxc
-if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
-  pass "tapped the Guide tab"
-else
-  fail "the Guide tab was not on screen for an Xtream playlist"
-fi
-sleep 25
-refresh_log
-if echo "$LOG" | grep -qE "E2E EPG programs=[1-9][0-9]* channels=[1-9][0-9]*"; then
-  pass "the guide rendered programmes from the panel's XMLTV feed"
-elif echo "$LOG" | grep -q "E2E EPG_MISSING"; then
-  fail "the guide fell back to the no-EPG state although the panel publishes /xmltv.php"
-else
-  fail "the guide never reached a definite EPG state (no E2E EPG line after tapping)"
-fi
-show_log "E2E EPG"
 
 step "VOD playback (first film of the first non-empty category)"
 run_action playvod 90
