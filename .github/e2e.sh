@@ -100,24 +100,31 @@ run_action() { # action, seconds to wait, [extra e2e_index]
 # A UI step must not fail just because an earlier step left the app dead: if the
 # launcher or a system window holds focus, relaunch before tapping.
 ensure_foreground() { # [navigation action to use when relaunching, e.g. openxc]
-  # Do NOT trust `dumpsys window | grep mCurrentFocus` here: on this headless
-  # emulator it reports the launcher while the app is plainly on screen (a
-  # uiautomator dump showed the player while focus said NexusLauncher), so
-  # gating on it killed healthy sessions and threw away their navigation.
-  # Ask uiautomator what is actually rendered instead.
+  # Two traps here. `dumpsys window | grep mCurrentFocus` reports the launcher
+  # while the app is plainly on screen, so it cannot be the signal. And
+  # `uiautomator dump` itself can fail on a heavy Compose screen - a failed dump
+  # says nothing about which app is in front, so relaunching on it killed healthy
+  # sessions in a loop. Only a dump that SUCCEEDED and shows another package
+  # means the app is really gone.
   local action="${1:-dump}" tries=1 dump
   while [ "$tries" -le 3 ]; do
-    dump=$(timeout 60 adb shell uiautomator dump /sdcard/fg.xml > /dev/null 2>&1; timeout 30 adb shell cat /sdcard/fg.xml 2>/dev/null)
+    dump=$(timeout 60 adb shell uiautomator dump /sdcard/fg.xml 2>&1; timeout 60 adb shell cat /sdcard/fg.xml 2>/dev/null)
     case "$dump" in
       *com.zcc09.iptvplayer*) return 0 ;;
+      *"hierchary dumped"*|*"hierarchy dumped"*)
+        echo "     (another app is on screen; relaunching via '$action', attempt $tries)"
+        run_action "$action" 20
+        tries=$((tries + 1))
+        ;;
+      *)
+        echo "     (uiautomator dump failed or timed out; assuming the app is still up)"
+        return 0
+        ;;
     esac
-    echo "     (app UI not on screen; relaunching via '$action', attempt $tries)"
-    run_action "$action" 20
-    tries=$((tries + 1))
   done
   echo "     (warning: the app's UI is still not on screen after 3 launches)"
-  echo "     --- app log, last 30 lines (why it is gone) ---"
-  timeout 60 adb logcat -d -v time IPTV_E2E:V IPTVPlayer:V AndroidRuntime:E '*:S' 2>/dev/null | tail -30 | sed 's/^/     | /'
+  echo "     --- app log, last 80 lines (why it is gone) ---"
+  timeout 60 adb logcat -d -v time IPTV_E2E:V IPTVPlayer:V AndroidRuntime:E '*:S' 2>/dev/null | tail -80 | sed 's/^/     | /'
   return 0
 }
 
@@ -198,9 +205,9 @@ fi
 show_log "SEED_"
 
 step "Guide UI: the EPG tab, driven the way a viewer taps it"
-# The CI panel publishes a real XMLTV guide (`/xmltv.php`), so the guide must
-# render programmes, not degrade. Only silence (crash / swallowed error) or a
-# regression back to the no-EPG state fails this step.
+# The Guide tab lives inside a playlist, so open the Xtream one first: the app
+# starts on the playlists root, which has no tab bar at all.
+run_action openxc 20
 ensure_foreground openxc
 if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
   pass "tapped the Guide tab"
