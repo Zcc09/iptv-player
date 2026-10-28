@@ -182,31 +182,33 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     LaunchedEffect(channel.id) {
         if (!WatchHistory.isOnDemand(channel.id)) return@LaunchedEffect
         var resumedLogged = false
+        var waited = 0L
         while (true) {
-            when {
-                !resumedLogged && exo.duration > 0 -> {
-                    resumedLogged = true
-                    val saved = WatchHistory.position(channel.id)
-                    if (WatchHistory.shouldResume(saved, exo.duration)) {
-                        exo.seekTo(saved)
-                        Logx.i("E2E RESUME key=${channel.id} seek=$saved duration=${exo.duration}")
-                    }
+            // Seek once the container reports a duration, but do not wait forever:
+            // a panel file can sit in buffering and we still know where the viewer
+            // was (shouldResume treats an unknown duration as "just past the minimum").
+            if (!resumedLogged && (exo.duration > 0 || waited >= 20_000)) {
+                resumedLogged = true
+                val saved = WatchHistory.position(channel.id)
+                if (WatchHistory.shouldResume(saved, exo.duration)) {
+                    exo.seekTo(saved)
+                    Logx.i("E2E RESUME key=${channel.id} seek=$saved duration=${exo.duration}")
                 }
-                exo.isPlaying -> {
-                    val pos = exo.currentPosition
-                    if (pos > 0) {
-                        WatchHistory.record(
-                            key = channel.id,
-                            name = channel.name,
-                            playlistId = channel.playlistId,
-                            url = url,
-                            positionMs = pos,
-                            durationMs = exo.duration
-                        )
-                    }
+            } else if (resumedLogged && exo.isPlaying) {
+                val pos = exo.currentPosition
+                if (pos > 0) {
+                    WatchHistory.record(
+                        key = channel.id,
+                        name = channel.name,
+                        playlistId = channel.playlistId,
+                        url = url,
+                        positionMs = pos,
+                        durationMs = exo.duration
+                    )
                 }
             }
             delay(5_000)
+            waited += 5_000
         }
     }
 
