@@ -92,6 +92,7 @@ import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.UrlTools
+import com.zcc09.iptvplayer.core.WatchHistory
 import com.zcc09.iptvplayer.player.Playback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -135,6 +136,9 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     var showCastDialog by remember { mutableStateOf(false) }
     var showTrackDialog by remember { mutableStateOf(false) }
     var trackSnapshot by remember { mutableStateOf<Tracks?>(null) }
+    // Sleep timer: cycles Off -> 15 -> 30 -> 60 minutes, then pauses playback.
+    var sleepMinutes by remember { mutableIntStateOf(0) }
+    var sleepDeadline by remember { mutableStateOf(0L) }
     var aspectIndex by remember { mutableIntStateOf(0) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var pip by remember { mutableStateOf(false) }
@@ -173,8 +177,54 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     val siblings = remember(channel.playlistId) { Repo.channelsOf(channel.playlistId) }
     val pipSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
 
+    // Resume a film/episode where it was left, and remember progress while it
+    // plays. Live channels are skipped: a position in a live stream is meaningless.
+    LaunchedEffect(channel.id) {
+        if (!WatchHistory.isOnDemand(channel.id)) return@LaunchedEffect
+        var resumedLogged = false
+        while (true) {
+            when {
+                !resumedLogged && exo.duration > 0 -> {
+                    resumedLogged = true
+                    val saved = WatchHistory.position(channel.id)
+                    if (WatchHistory.shouldResume(saved, exo.duration)) {
+                        exo.seekTo(saved)
+                        Logx.i("E2E RESUME key=${channel.id} seek=$saved duration=${exo.duration}")
+                    }
+                }
+                exo.isPlaying -> {
+                    val pos = exo.currentPosition
+                    if (pos > 0) {
+                        WatchHistory.record(
+                            key = channel.id,
+                            name = channel.name,
+                            playlistId = channel.playlistId,
+                            url = url,
+                            positionMs = pos,
+                            durationMs = exo.duration
+                        )
+                    }
+                }
+            }
+            delay(5_000)
+        }
+    }
+
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    // Sleep timer body: wait out the deadline, then pause rather than stop so the
+    // viewer wakes up to the same position.
+    LaunchedEffect(sleepDeadline) {
+        val deadline = sleepDeadline
+        if (deadline <= 0L) return@LaunchedEffect
+        val left = deadline - System.currentTimeMillis()
+        if (left > 0) delay(left)
+        if (exo.isPlaying) exo.pause()
+        Logx.i("E2E SLEEP fired minutes=0")
+        sleepMinutes = 0
+        sleepDeadline = 0L
     }
 
     LaunchedEffect(showZapBanner) {
@@ -461,6 +511,22 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                         val (a, t) = countTracks(trackSnapshot)
                         Logx.i("E2E TRACKS audio=$a text=$t")
                     }) { Text("Tracks", color = Color.White) }
+                    TextButton(onClick = {
+                        sleepMinutes = when (sleepMinutes) {
+                            0 -> 15
+                            15 -> 30
+                            30 -> 60
+                            else -> 0
+                        }
+                        sleepDeadline =
+                            if (sleepMinutes == 0) 0L else System.currentTimeMillis() + sleepMinutes * 60_000L
+                        Logx.i("E2E SLEEP set minutes=$sleepMinutes")
+                    }) {
+                        Text(
+                            if (sleepMinutes == 0) "Timer" else "Timer ${sleepMinutes}m",
+                            color = Color.White
+                        )
+                    }
                     if (pipSupported) {
                         TextButton(onClick = {
                             val act = activity

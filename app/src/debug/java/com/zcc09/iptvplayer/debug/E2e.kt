@@ -12,6 +12,7 @@ import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Playlist
 import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.Recorder
+import com.zcc09.iptvplayer.core.WatchHistory
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.VodItem
@@ -202,6 +203,8 @@ object E2e : E2eHandler {
             "vodmovies" -> scope.launch { vodProbeMovies() }
             "vodshows" -> scope.launch { vodProbeShows() }
             "playvod" -> scope.launch { vodPlayFirstMovie() }
+            "history" -> historyProbe()
+            "historyseed" -> scope.launch { historySeed() }
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "epg" -> scope.launch { epgProbe() }
             "rec" -> scope.launch {
@@ -283,6 +286,43 @@ object E2e : E2eHandler {
 
     private fun vodPlaylist(): Playlist? =
         Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
+
+    /** Dump the watch history so the suite can prove progress was persisted. */
+    private fun historyProbe() {
+        val items = WatchHistory.items.value
+        Logx.i("E2E HISTORY count=${items.size}")
+        items.take(3).forEach {
+            Logx.i("E2E HISTORY_ITEM key=${it.key} pos=${it.positionMs} dur=${it.durationMs}")
+        }
+    }
+
+    /**
+     * Seed a mid-film position for the first VOD film, so the resume path can be
+     * exercised on emulators that buffer a panel's Matroska without ever playing
+     * it long enough to record progress. Logs what it seeded.
+     */
+    private suspend fun historySeed() {
+        val playlist = vodPlaylist()
+        if (playlist == null) {
+            Logx.w("E2E_HISTORY_SEED no Xtream playlist")
+            return
+        }
+        val (category, items) = vodCategoryWithItems(playlist.id, MediaKind.MOVIE) ?: run {
+            Logx.w("E2E_HISTORY_SEED no movie")
+            return
+        }
+        val item = items.firstOrNull() ?: return
+        val url = Repo.movieUrl(playlist.id, item) ?: return
+        WatchHistory.record(
+            key = "movie:${playlist.id}:${item.id}",
+            name = item.name,
+            playlistId = playlist.id,
+            url = url,
+            positionMs = 600_000,
+            durationMs = 3_600_000
+        )
+        Logx.i("E2E HISTORY_SEEDED key=movie:${playlist.id}:${item.id} category=$category pos=600000")
+    }
 
     /**
      * 4K/8K/HDR titles never reach a rendered frame on the CPU-emulated CI

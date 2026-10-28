@@ -109,6 +109,7 @@ object Repo {
         _epgWindowHours.value = if (window in setOf(2, 4, 6)) window else 4
         _epgNowPlaying.value = p.getBoolean(KEY_EPG_NOW_PLAYING, true)
         loadPlaylists()
+        WatchHistory.init(ctx)
     }
 
     // ---------------------------------------------------------------- playlists

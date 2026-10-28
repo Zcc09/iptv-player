@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.Episode
@@ -52,6 +54,7 @@ import com.zcc09.iptvplayer.core.MediaKind
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.VodCategory
 import com.zcc09.iptvplayer.core.VodItem
+import com.zcc09.iptvplayer.core.WatchHistory
 
 /**
  * Films and series (the "Movies" and "Shows" tabs).
@@ -199,6 +202,10 @@ internal fun VodTab(playlistId: String, kind: MediaKind) {
         onChange = { query = it },
         placeholder = if (kind == MediaKind.MOVIE) "Search movies" else "Search shows"
     )
+
+    // "Continue watching" sits above the catalogue: the title someone was in the
+    // middle of is the most likely next thing they want, not a category hunt.
+    if (kind == MediaKind.MOVIE) ContinueWatchingRow(playlistId)
 
     when {
         loadingCats && cats.isEmpty() -> VodLoading("Loading categories…")
@@ -530,5 +537,76 @@ private fun EpisodeRow(episode: Episode, onPlay: () -> Unit) {
             contentDescription = "Play episode",
             tint = MaterialTheme.colorScheme.primary
         )
+    }
+}
+
+/**
+ * "Continue watching": films left part-way, newest first. Only entries with real
+ * progress for this playlist, and only those the resume rule accepts.
+ */
+@Composable
+private fun ContinueWatchingRow(playlistId: String) {
+    val history by WatchHistory.items.collectAsState()
+    val resume = remember(history, playlistId) {
+        history.filter {
+            it.playlistId == playlistId && WatchHistory.shouldResume(it.positionMs, it.durationMs)
+        }
+    }
+    if (resume.isEmpty()) return
+
+    Text(
+        "Continue watching",
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 6.dp)
+    )
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(resume, key = { it.key }) { entry ->
+            Column(
+                modifier = Modifier
+                    .width(190.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
+                    .clickable {
+                        Repo.requestPlay(
+                            Channel(
+                                id = entry.key,
+                                playlistId = entry.playlistId,
+                                name = entry.name,
+                                url = entry.url
+                            )
+                        )
+                    }
+                    .padding(10.dp)
+            ) {
+                Text(
+                    entry.name,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(entry.progress.coerceIn(0.02f, 1f))
+                            .height(3.dp)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${(entry.progress * 100).toInt()}% watched",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
