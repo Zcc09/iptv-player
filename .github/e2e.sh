@@ -97,6 +97,20 @@ run_action() { # action, seconds to wait, [extra e2e_index]
   refresh_log
 }
 
+# A UI step must not fail just because an earlier step left the app dead: if the
+# launcher or a system window holds focus, relaunch before tapping.
+ensure_foreground() {
+  local focus
+  focus=$(timeout 30 adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | tr -d '\r' | sed 's/^ *//')
+  case "$focus" in
+    *iptvplayer*) return 0 ;;
+  esac
+  echo "     (app not in front: ${focus:-unknown}; relaunching)"
+  timeout 45 adb shell am force-stop "$PKG" > /dev/null 2>&1 || true
+  timeout 90 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || true
+  sleep 10
+}
+
 # Screenshots for the store listing (Play wants 2-8 phone shots, >=320px).
 # Written to ./screenshots and uploaded as a CI artifact.
 shot() { # <name>
@@ -213,6 +227,12 @@ show_log "E2E_VOD_(SHOW|EPISODE)"
 step "VOD playback (first film of the first non-empty category)"
 run_action playvod 90
 assert_log "E2E_VOD_PLAY category=.+ name=.+ url=https?://" "film playback requested"
+# A panel's VOD origin redirects through a session id and the emulator decodes in
+# software, so the first attempt can still be buffering when the clock runs out.
+if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  echo "     (no rendered frame yet - retrying the film once)"
+  run_action playvod 90
+fi
 assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the film actually renders video"
 show_log "E2E_VOD_PLAY|PLAYBACK_"
 
@@ -222,6 +242,10 @@ step "VOD playback: an episode of the first series (shows, not just films)"
 run_action playvodep 150
 assert_log "E2E_VOD_PLAY_EPISODE .*series=.+ S[0-9]+E[0-9]+ .*url=https?://" "episode playback requested"
 assert_log "PLAYBACK_OPENING .*mime=video/x-matroska" "the episode opened as Matroska, not raw TS"
+if ! echo "$LOG" | grep -qE "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)"; then
+  echo "     (no rendered frame yet - retrying the episode once)"
+  run_action playvodep 150
+fi
 assert_log "PLAYBACK_(FIRST_FRAME|VIDEO_SIZE|READY)" "the episode actually renders video"
 show_log "E2E_VOD_PLAY_EPISODE|PLAYBACK_"
 
@@ -231,6 +255,7 @@ step "VOD UI: the Movies tab, driven the way a viewer taps it"
 # because CI logs and artifacts on a public repo are readable by anyone.
 run_action openxc 20
 assert_log "E2E_OPEN_XC .*vod=true" "an Xtream playlist offers the VOD tabs"
+ensure_foreground
 if timeout 150 python3 .github/ui_tap.py --text "Movies" --wait 60; then
   pass "tapped the Movies tab"
 else
@@ -249,6 +274,7 @@ step "Guide UI: the EPG tab, driven the way a viewer taps it"
 # The CI panel publishes a real XMLTV guide (`/xmltv.php`), so the guide must
 # render programmes, not degrade. Only silence (crash / swallowed error) or a
 # regression back to the no-EPG state fails this step.
+ensure_foreground
 if timeout 150 python3 .github/ui_tap.py --text "Guide" --wait 60; then
   pass "tapped the Guide tab"
 else
@@ -299,6 +325,7 @@ fi
 step "Play a real MPEG-TS channel"
 run_action playfirst 45
 assert_log "PLAYBACK_OPENING url=" "player opened the stream url"
+assert_log "E2E TRACKS audio=[1-9]" "the player enumerates the stream's audio tracks"
 if echo "$LOG" | grep -qE "PLAYBACK_BUFFERING|PLAYBACK_READY|PLAYBACK_VIDEO_SIZE|PLAYBACK_FIRST_FRAME"; then
   pass "live TS stream data reached the player"
 else

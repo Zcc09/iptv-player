@@ -73,8 +73,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -93,6 +96,19 @@ import com.zcc09.iptvplayer.player.Playback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+/** How many audio / subtitle groups the current stream advertises (for the E2E line). */
+private fun countTracks(tracks: Tracks?): Pair<Int, Int> {
+    var audio = 0
+    var text = 0
+    tracks?.groups?.forEach { g ->
+        when (g.type) {
+            C.TRACK_TYPE_AUDIO -> audio += 1
+            C.TRACK_TYPE_TEXT -> text += 1
+        }
+    }
+    return audio to text
+}
 
 private val ASPECTS = listOf(
     "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
@@ -117,6 +133,8 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     val connectedDevice by CastCtl.device.collectAsState()
 
     var showCastDialog by remember { mutableStateOf(false) }
+    var showTrackDialog by remember { mutableStateOf(false) }
+    var trackSnapshot by remember { mutableStateOf<Tracks?>(null) }
     var aspectIndex by remember { mutableIntStateOf(0) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var pip by remember { mutableStateOf(false) }
@@ -191,6 +209,11 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 videoSizeText = "${videoSize.width}x${videoSize.height}"
                 Logx.i("PLAYBACK_VIDEO_SIZE ${videoSize.width}x${videoSize.height} url=$url")
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                val (audio, text) = countTracks(tracks)
+                Logx.i("E2E TRACKS audio=$audio text=$text url=$url")
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -432,6 +455,12 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                     TextButton(onClick = { aspectIndex = (aspectIndex + 1) % ASPECTS.size }) {
                         Text(ASPECTS[aspectIndex].first, color = Color.White)
                     }
+                    TextButton(onClick = {
+                        trackSnapshot = exo.currentTracks
+                        showTrackDialog = true
+                        val (a, t) = countTracks(trackSnapshot)
+                        Logx.i("E2E TRACKS audio=$a text=$t")
+                    }) { Text("Tracks", color = Color.White) }
                     if (pipSupported) {
                         TextButton(onClick = {
                             val act = activity
@@ -790,6 +819,64 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                 }
             }
         }
+    }
+
+    if (showTrackDialog) {
+        val groups = trackSnapshot?.groups.orEmpty()
+        AlertDialog(
+            onDismissRequest = { showTrackDialog = false },
+            title = { Text("Audio & subtitles") },
+            text = {
+                Column {
+                    if (groups.none { it.type == C.TRACK_TYPE_AUDIO || it.type == C.TRACK_TYPE_TEXT }) {
+                        Text(
+                            "This stream publishes no selectable audio or subtitle tracks.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    listOf(C.TRACK_TYPE_AUDIO to "Audio", C.TRACK_TYPE_TEXT to "Subtitles").forEach { (type, heading) ->
+                        val rows = groups.withIndex().filter { it.value.type == type }
+                        if (rows.isNotEmpty()) {
+                            Text(heading, style = MaterialTheme.typography.titleSmall)
+                            rows.forEach { (gi, g) ->
+                                for (ti in 0 until g.length) {
+                                    val f = g.getTrackFormat(ti)
+                                    val label = f.label?.takeIf { it.isNotBlank() }
+                                        ?: f.language?.takeIf { it.isNotBlank() }
+                                        ?: "Track ${ti + 1}"
+                                    val selected = g.isTrackSelected(ti)
+                                    TextButton(onClick = {
+                                        exo.trackSelectionParameters = exo.trackSelectionParameters
+                                            .buildUpon()
+                                            .setTrackTypeDisabled(type, false)
+                                            .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, ti))
+                                            .build()
+                                        Logx.i("E2E TRACK_PICK type=$type group=$gi index=$ti")
+                                        trackSnapshot = exo.currentTracks
+                                        showTrackDialog = false
+                                    }) {
+                                        Text((if (selected) "✓ " else "") + label)
+                                    }
+                                }
+                            }
+                            TextButton(onClick = {
+                                exo.trackSelectionParameters = exo.trackSelectionParameters
+                                    .buildUpon()
+                                    .setTrackTypeDisabled(type, true)
+                                    .build()
+                                Logx.i("E2E TRACK_OFF type=$type")
+                                trackSnapshot = exo.currentTracks
+                                showTrackDialog = false
+                            }) { Text(if (type == C.TRACK_TYPE_TEXT) "Off (no subtitles)" else "Off (mute)") }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTrackDialog = false }) { Text("Close") }
+            }
+        )
     }
 
     if (showCastDialog) {

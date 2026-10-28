@@ -284,17 +284,33 @@ object E2e : E2eHandler {
     private fun vodPlaylist(): Playlist? =
         Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
 
+    /**
+     * 4K/8K/HDR titles never reach a rendered frame on the CPU-emulated CI
+     * device, so a fixture that happens to pick one fails the playback
+     * assertions for a reason that has nothing to do with the app. Panels sort
+     * their catalogue however they like and the "first non-empty category" was
+     * a 4K Dolby one, so prefer ordinary-definition titles and only fall back
+     * to the heavy ones when nothing else has items.
+     */
+    private fun isHeavyTitle(s: String): Boolean =
+        listOf("4k", "⁴ᴷ", "uhd", "2160", "8k", "⁸ᴷ", "hdr", "dolby").any { s.contains(it, ignoreCase = true) }
+
     private suspend fun vodCategoryWithItems(playlistId: String, kind: MediaKind): Pair<String, List<VodItem>>? {
         val cats = Repo.vodCategoriesFor(playlistId, kind)
             .ifEmpty { Repo.loadVodCategories(playlistId, kind) }
-        var tried = 0
-        for (cat in cats) {
-            if (tried >= 5) break
-            tried++
-            val items = Repo.loadVodItems(playlistId, kind, cat.id)
-            if (items.isNotEmpty()) return cat.name to items
+        for (allowHeavy in listOf(false, true)) {
+            var tried = 0
+            for (cat in cats) {
+                if (tried >= 5) break
+                if (!allowHeavy && isHeavyTitle(cat.name)) continue
+                tried++
+                val items = Repo.loadVodItems(playlistId, kind, cat.id)
+                    .filterNot { isHeavyTitle(it.name) }
+                if (items.isNotEmpty()) return cat.name to items
+            }
+            if (tried > 0) break
         }
-        Logx.w("E2E_VOD_NO_ITEMS kind=$kind categories=${cats.size} tried=$tried")
+        Logx.w("E2E_VOD_NO_ITEMS kind=$kind categories=${cats.size}")
         return null
     }
 
