@@ -115,6 +115,8 @@ fun TvHomeScreen() {
         ?: playlists.firstOrNull()
     val activePlaylistId = activePlaylist?.id.orEmpty()
     val allChannels = channelsMap[activePlaylistId].orEmpty()
+    // Only Xtream accounts carry a film/series catalogue; an M3U link is live-only.
+    val vodAvailable = remember(activePlaylistId) { Repo.supportsVod(activePlaylistId) }
 
     // Categories in active playlist
     val groups = remember(allChannels) {
@@ -273,7 +275,9 @@ fun TvHomeScreen() {
                             Spacer(Modifier.height(14.dp))
                         }
 
-                        // Quick-access tile: the recordings list (10-foot mode).
+                        // Quick-access tiles: recordings, plus the VOD tabs - a
+                        // ten-foot UI has no tab row, so without these tiles a
+                        // catalogue of films and series is unreachable on a TV.
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -282,6 +286,18 @@ fun TvHomeScreen() {
                                 count = recordingsCount,
                                 onOpen = { Nav.push(Screen.Recordings) }
                             )
+                            if (vodAvailable) {
+                                TvQuickTile(
+                                    icon = "🎞️",
+                                    label = "Movies",
+                                    detail = "Films on demand"
+                                ) { Nav.push(Screen.Channels(activePlaylistId, ChannelsTab.MOVIE)) }
+                                TvQuickTile(
+                                    icon = "📺",
+                                    label = "Shows",
+                                    detail = "Series & episodes"
+                                ) { Nav.push(Screen.Channels(activePlaylistId, ChannelsTab.SERIES)) }
+                            }
                         }
                         Spacer(Modifier.height(10.dp))
 
@@ -836,10 +852,21 @@ private fun TvChannelCard(
  */
 @Composable
 private fun TvRecordingsTile(count: Int, onOpen: () -> Unit) {
+    TvQuickTile(
+        icon = "🎬",
+        label = "Recordings",
+        detail = "$count file${if (count == 1) "" else "s"}",
+        onClick = onOpen
+    )
+}
+
+/** A 10-foot quick-access tile: icon, label and a one-line detail. */
+@Composable
+private fun TvQuickTile(icon: String, label: String, detail: String, onClick: () -> Unit) {
     TvFocusableCard(
-        onClick = onOpen,
+        onClick = onClick,
         modifier = Modifier
-            .width(220.dp)
+            .width(200.dp)
             .height(64.dp)
     ) { isFocused ->
         Row(
@@ -849,19 +876,19 @@ private fun TvRecordingsTile(count: Int, onOpen: () -> Unit) {
                 .padding(horizontal = 14.dp)
         ) {
             Text(
-                text = "🎬",
+                text = icon,
                 fontSize = 20.sp,
                 modifier = Modifier.padding(end = 12.dp)
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Recordings",
+                    text = label,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
                     color = Color.White
                 )
                 Text(
-                    text = "$count file${if (count == 1) "" else "s"}",
+                    text = detail,
                     fontSize = 11.sp,
                     color = Color(0xFF94A3B8)
                 )

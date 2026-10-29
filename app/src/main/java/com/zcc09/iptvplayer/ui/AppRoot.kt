@@ -84,7 +84,7 @@ fun AppRoot() {
                 }
             }
             is Screen.EditPlaylist -> PlaylistEditScreen(screen.playlistId)
-            is Screen.Channels -> ChannelsScreen(screen.playlistId)
+            is Screen.Channels -> ChannelsScreen(screen.playlistId, screen.initialTab)
             is Screen.Player -> PlayerScreen(screen.channel, screen.urlOverride)
             is Screen.Series -> SeriesScreen(screen.playlistId, screen.seriesId, screen.title)
             is Screen.Recordings -> RecordingsScreen()

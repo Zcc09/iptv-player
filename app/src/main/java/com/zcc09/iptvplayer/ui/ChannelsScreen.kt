@@ -52,12 +52,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.EpgStore
+import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.Repo
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChannelsScreen(playlistId: String) {
+fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIVE) {
     val playlist = remember(playlistId) { Repo.playlist(playlistId) }
     val channelsMap by Repo.channels.collectAsState()
     val favorites by Repo.favorites.collectAsState()
@@ -66,7 +67,7 @@ fun ChannelsScreen(playlistId: String) {
     // Xtream accounts expose films and series; a plain M3U link has no VOD API.
     // Recordings are global, so the tab row shows for every playlist.
     val vodAvailable = remember(playlistId) { Repo.supportsVod(playlistId) }
-    var tab by remember(playlistId) { mutableStateOf(ChannelsTab.LIVE) }
+    var tab by remember(playlistId) { mutableStateOf(initialTab) }
 
     // Films, series and recordings live in their own screen tree; the live list
     // below is only rendered for the Live tab.
@@ -138,6 +139,17 @@ fun ChannelsScreen(playlistId: String) {
                 .padding(padding)
         ) {
             VodTabRow(selected = tab, showVodTabs = vodAvailable, onSelect = { tab = it })
+            // A plain M3U link carries live channels only - a panel with a full
+            // catalogue then looks live-only here. Say why instead of silently
+            // hiding the tabs.
+            if (!vodAvailable && playlist?.type == PlaylistType.M3U) {
+                Text(
+                    "Movies and Shows need this server's Xtream login — a plain M3U link only carries live channels.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

@@ -70,7 +70,7 @@ internal fun vodItemKey(playlistId: String, kind: MediaKind, categoryId: String)
     "$playlistId|${kind.name}|$categoryId"
 
 /** Tabs of the channels screen row: Live, (Movies, Shows for VOD accounts), Recordings. */
-internal enum class ChannelsTab { LIVE, GUIDE, MOVIE, SERIES, RECORDINGS }
+enum class ChannelsTab { LIVE, GUIDE, MOVIE, SERIES, RECORDINGS }
 
 private fun ChannelsTab.label(): String = when (this) {
     ChannelsTab.LIVE -> "Live"

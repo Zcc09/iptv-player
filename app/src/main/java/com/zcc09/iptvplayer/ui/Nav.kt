@@ -6,7 +6,11 @@ import com.zcc09.iptvplayer.core.Channel
 sealed class Screen {
     data object Home : Screen()
     data class EditPlaylist(val playlistId: String?) : Screen()
-    data class Channels(val playlistId: String) : Screen()
+    data class Channels(
+        val playlistId: String,
+        /** Open straight on a tab: the 10-foot Movies/Shows tiles land here. */
+        val initialTab: ChannelsTab = ChannelsTab.LIVE
+    ) : Screen()
     data class Player(val channel: Channel, val urlOverride: String? = null) : Screen()
     /** Seasons/episodes of one series. */
     data class Series(val playlistId: String, val seriesId: Int, val title: String) : Screen()
