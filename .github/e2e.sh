@@ -26,6 +26,9 @@ trap 'timeout 90 adb logcat -d -v time > app-logcat-full.txt 2>/dev/null || true
 PKG=com.zcc09.iptvplayer
 ACT="$PKG/.MainActivity"
 APK=apk/iptv-player-debug.apk
+# The provider the suite tests against; also used to tell "panel is down" apart
+# from "the app is broken" before blaming either.
+PANEL_M3U_URL="https://tv.mojangle.net/output/m3u"
 FAILURES=0
 LOG=""
 ADB_TIMEOUT=90
@@ -198,7 +201,36 @@ timeout 60 adb shell am start -W -n "$ACT" > /dev/null 2>&1 || echo "     (first
 sleep 5
 
 step "Load playlists from the live server (M3U link + Xtream account)"
+# The provider is a remote host; a blip on the runner's route to it must not turn
+# into dozens of "the feature is broken" failures. Probe first, retry the seed a
+# few times, and bail out early with one honest line if the panel is unreachable.
+PANEL_OK=0
+for pre in 1 2 3; do
+  code=$(timeout 30 curl -sS -o /dev/null -m 20 -w "%{http_code}" "$PANEL_M3U_URL" 2>/dev/null || echo "000")
+  echo "     (panel probe $pre: HTTP ${code:-000})"
+  [ "$code" = "200" ] && { PANEL_OK=1; break; }
+  sleep 15
+done
+if [ "$PANEL_OK" -ne 1 ]; then
+  # fail() only counts a failure and carries on, which here would mean seeding
+  # against a dead panel and reporting every downstream feature as broken.
+  echo "  ❌ the provider panel is unreachable from this runner (network), not an app failure"
+  echo
+  echo "=========================================="
+  echo " END-TO-END: PROVIDER UNREACHABLE"
+  echo " Everything below the playlist load needs the provider's data, so the"
+  echo " run stops here rather than reporting a dozen app failures. Re-run it."
+  echo "=========================================="
+  exit 1
+fi
 run_action seed 70
+seed_try=1
+while [ "$seed_try" -lt 3 ] && ! echo "$LOG" | grep -qE "SEED_OK m3u=[1-9][0-9]*"; do
+  seed_try=$((seed_try + 1))
+  echo "     (no channels yet - seed retry $seed_try after 20s)"
+  sleep 20
+  run_action seed 70
+done
 assert_log "APP_STARTED" "app started"
 assert_log "SEED_OK m3u=[1-9][0-9]*" "M3U playlist link returned channels"
 assert_log "SEED_OK .*xc=[1-9][0-9]*" "Xtream account returned channels"
