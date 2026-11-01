@@ -1,5 +1,7 @@
 package com.zcc09.iptvplayer.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -40,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.zcc09.iptvplayer.BuildConfig
 import com.zcc09.iptvplayer.core.AppUiMode
+import com.zcc09.iptvplayer.core.BackupCodec
 import com.zcc09.iptvplayer.core.CastMode
 import com.zcc09.iptvplayer.core.Net
 import com.zcc09.iptvplayer.core.PlayUpdate
@@ -62,6 +65,49 @@ fun SettingsScreen() {
     val playlists by Repo.playlists.collectAsState()
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
     var relayStatus by remember { mutableStateOf(RelayManager.status()) }
+    var backupNote by remember { mutableStateOf<String?>(null) }
+
+    // Backup goes through the system file picker: no storage permission, and the
+    // user decides where the file lives (Drive, a USB stick, Downloads).
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) {
+            backupNote = "Export cancelled"
+            return@rememberLauncherForActivityResult
+        }
+        val doc = Repo.backupDoc()
+        val result = runCatching {
+            context.contentResolver.openOutputStream(uri)?.use {
+                it.write(BackupCodec.encode(doc).toByteArray())
+            } ?: error("the chosen file could not be opened")
+        }
+        backupNote = result.fold(
+            onSuccess = { "Backup written: ${BackupCodec.summary(doc)}" },
+            onFailure = { "Export failed: ${it.message}" }
+        )
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) {
+            backupNote = "Import cancelled"
+            return@rememberLauncherForActivityResult
+        }
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        val doc = text?.let { BackupCodec.decode(it) }
+        if (doc == null) {
+            backupNote = "That file is not an Internet TV Player backup"
+        } else {
+            Repo.restore(doc)
+            // Channel lists are not carried in a backup; fetch them again.
+            doc.playlists.forEach { Repo.refreshAsync(it.id) }
+            backupNote = "Restored ${BackupCodec.summary(doc)} — downloading channel lists…"
+        }
+    }
 
     fun refreshRelayStatus() {
         relayStatus = RelayManager.status()
@@ -358,6 +404,37 @@ fun SettingsScreen() {
                 }
             }) {
                 Text("Check for updates now")
+            }
+
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            // -------------------------------------------------- backup & restore
+            Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "One JSON file with your playlists, favourites and resume points — " +
+                    "handy when you set up a second device. Device settings stay here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = { exportLauncher.launch("iptv-player-backup.json") }) {
+                    Text("Export backup")
+                }
+                TextButton(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
+                ) { Text("Import backup") }
+            }
+            backupNote?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             Spacer(Modifier.height(22.dp))

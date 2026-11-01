@@ -121,6 +121,13 @@ object WatchHistory {
         persist(emptyList())
     }
 
+    /** Replace the whole list (backup restore); keeps the file and cap in sync. */
+    fun replaceAll(entries: List<Entry>) {
+        val next = entries.sortedByDescending { it.updatedAt }.take(MAX_ENTRIES)
+        _items.value = next
+        persist(next)
+    }
+
     private fun persist(list: List<Entry>) {
         val d = dir ?: return
         val body = runCatching { json.encodeToString(serializer(), list) }.getOrNull() ?: return

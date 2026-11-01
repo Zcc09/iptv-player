@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer.debug
 import android.app.Activity
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.BackupCodec
 import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.E2eHandler
 import com.zcc09.iptvplayer.core.Episode
@@ -74,6 +75,7 @@ object E2e : E2eHandler {
         else Logx.i("E2E_CREDS source=default")
         when (action.lowercase()) {
             "seed" -> scope.launch { seed() }
+            "backup" -> backupProbe()
             "playnumbered" -> playNumbered()
             "refresh" -> scope.launch {
                 val total = Repo.refreshAll()
@@ -665,6 +667,25 @@ object E2e : E2eHandler {
         val preferred = Repo.playlists.value.firstOrNull { it.id == M3U_ID }
             ?: Repo.playlists.value.firstOrNull()
         return preferred?.let { Repo.channelsOf(it.id).firstOrNull() }
+    }
+
+    /**
+     * Round-trip the live state through the backup codec on device: what the
+     * file picker writes and reads, minus the picker itself.
+     */
+    private fun backupProbe() {
+        try {
+            val doc = Repo.backupDoc()
+            val text = BackupCodec.encode(doc)
+            val back = BackupCodec.decode(text)
+            Logx.i(
+                "E2E BACKUP bytes=${text.length} playlists=${back?.playlists?.size ?: -1} " +
+                    "favorites=${back?.favorites?.size ?: -1} history=${back?.history?.size ?: -1}"
+            )
+            Logx.i("E2E BACKUP_REJECT junk=${BackupCodec.decode("{\"not\":\"ours\"}") == null}")
+        } catch (t: Throwable) {
+            Logx.e("E2E BACKUP_FAILED", t)
+        }
     }
 
     /**

@@ -250,6 +250,13 @@ assert_log "E2E EPG_M3U streams=[1-9][0-9]* programs=[1-9][0-9]* missing=false" 
 assert_log "E2E EPG_M3U_SAMPLE channel=" "a programme row carries a real title"
 show_log "E2E EPG_M3U"
 
+step "Backup: the exported file round-trips the real state"
+run_action backup 20
+assert_log "E2E BACKUP bytes=[0-9]+ playlists=[1-9][0-9]*" \
+  "a backup file carries the playlists"
+assert_log "E2E BACKUP_REJECT junk=true" "a file that is not a backup is rejected"
+show_log "E2E BACKUP"
+
 step "Guide UI: the EPG tab, driven the way a viewer taps it"
 # Two independent proofs: the driver action fetches and parses the panel's
 # guide (fatal), and the tap proves the tab renders it (best effort - this

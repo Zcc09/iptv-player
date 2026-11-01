@@ -246,6 +246,28 @@ object Repo {
 
     fun isFavorite(channelId: String): Boolean = _favorites.value.contains(channelId)
 
+    /** Everything worth moving between devices. */
+    fun backupDoc(): BackupDoc = BackupDoc(
+        exportedAt = System.currentTimeMillis(),
+        playlists = _playlists.value,
+        favorites = _favorites.value.toList().sorted(),
+        history = WatchHistory.items.value
+    )
+
+    /**
+     * Replace local state with a backup. Channel caches are not restored (they
+     * are re-downloaded on demand and are large), so the caller should refresh.
+     */
+    fun restore(doc: BackupDoc) {
+        _playlists.value = doc.playlists
+        persistPlaylists()
+        _channels.value = doc.playlists.associate { it.id to readChannelCache(it.id) }
+        _favorites.value = doc.favorites.toSet()
+        prefs?.edit()?.putStringSet(KEY_FAVORITES, _favorites.value)?.apply()
+        WatchHistory.replaceAll(doc.history)
+        postStatus("Backup restored: ${BackupCodec.summary(doc)}")
+    }
+
     fun toggleFavorite(channelId: String) {
         val next = _favorites.value.toMutableSet()
         if (!next.add(channelId)) next.remove(channelId)
