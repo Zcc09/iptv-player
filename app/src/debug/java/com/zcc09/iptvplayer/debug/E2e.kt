@@ -50,6 +50,8 @@ object E2e : E2eHandler {
 
     private const val M3U_ID = "ci-m3u"
     private const val XC_ID = "ci-xc"
+    /** Panel root, used to build an XMLTV url for the M3U playlist. */
+    private const val XC_BASE = "https://tv.mojangle.net"
 
     /** Demo playlist for the store screenshots: generic names, served from this repo. */
     private const val DEMO_ID = "demo-playlist"
@@ -72,6 +74,7 @@ object E2e : E2eHandler {
         else Logx.i("E2E_CREDS source=default")
         when (action.lowercase()) {
             "seed" -> scope.launch { seed() }
+            "playnumbered" -> playNumbered()
             "refresh" -> scope.launch {
                 val total = Repo.refreshAll()
                 Logx.i("E2E_REFRESH_DONE channels=$total")
@@ -205,6 +208,7 @@ object E2e : E2eHandler {
             "playvod" -> scope.launch { vodPlayFirstMovie() }
             "history" -> historyProbe()
             "historyseed" -> scope.launch { historySeed() }
+            "epgm3u" -> scope.launch { epgM3uProbe() }
             "playvodep" -> scope.launch { vodPlayFirstEpisode() }
             "epg" -> scope.launch { epgProbe() }
             "rec" -> scope.launch {
@@ -504,6 +508,13 @@ object E2e : E2eHandler {
                 name = "CI M3U playlist",
                 type = PlaylistType.M3U,
                 url = M3U_URL,
+                // A plain M3U link carries no guide. Wire the panel's XMLTV feed
+                // the way a user would, so the custom-EPG path is exercised.
+                epgUrl = if (xcUser.isNotBlank() && xcPass.isNotBlank()) {
+                    "$XC_BASE/xmltv.php?username=$xcUser&password=$xcPass"
+                } else {
+                    ""
+                },
                 autoRefresh = true,
                 refreshIntervalMinutes = 15
             )
@@ -599,6 +610,35 @@ object E2e : E2eHandler {
     }
 
     /**
+     * The custom-EPG path: the M3U playlist has no guide endpoint of its own,
+     * so seed() gives it the panel's XMLTV url. This proves an M3U playlist -
+     * not just an Xtream account - ends up with programme data.
+     */
+    private suspend fun epgM3uProbe() {
+        try {
+            val playlist = Repo.playlist(M3U_ID)
+            if (playlist == null) { Logx.w("E2E EPG_M3U_NO_PLAYLIST"); return }
+            if (playlist.epgUrl.isBlank()) { Logx.w("E2E EPG_M3U_NO_URL"); return }
+            Logx.i("E2E EPG_M3U_URL set=true type=${playlist.type}")
+            EpgStore.refresh(playlist)
+            var cache = EpgStore.flow(playlist.id).value
+            var waited = 0
+            while ((cache == null || cache.programs.isEmpty()) && waited < 30_000) {
+                delay(1_000)
+                waited += 1_000
+                cache = EpgStore.flow(playlist.id).value
+            }
+            val streams = cache?.programs?.size ?: 0
+            val programs = cache?.programs?.values?.sumOf { it.size } ?: 0
+            Logx.i("E2E EPG_M3U streams=$streams programs=$programs missing=${cache?.missing ?: true}")
+            val sample = cache?.programs?.entries?.firstOrNull { it.value.isNotEmpty() }
+            if (sample != null) {
+                Logx.i("E2E EPG_M3U_SAMPLE channel=${sample.key} title=${sample.value.first().title}")
+            }
+        } catch (t: Throwable) { Logx.e("E2E EPG_M3U_FAILED", t) }
+    }
+
+    /**
      * One complete PVR capture in a single process lifetime: start, hold for a
      * few seconds of real stream data, then stop. Splitting start/stop across
      * two actions would not work because each action force-stops the app,
@@ -625,6 +665,21 @@ object E2e : E2eHandler {
         val preferred = Repo.playlists.value.firstOrNull { it.id == M3U_ID }
             ?: Repo.playlists.value.firstOrNull()
         return preferred?.let { Repo.channelsOf(it.id).firstOrNull() }
+    }
+
+    /**
+     * Play the first channel that carries a channel number and announce it, so
+     * the E2E can type that number on the remote and prove numeric zap.
+     */
+    private fun playNumbered() {
+        val playlist = Repo.playlists.value.firstOrNull { it.type == PlaylistType.XTREAM }
+        val channel = playlist?.let { p -> Repo.channelsOf(p.id).firstOrNull { it.number > 0 } }
+        if (channel == null) {
+            Logx.w("E2E PLAY_NUMBER_NO_CHANNEL")
+            return
+        }
+        Logx.i("E2E PLAY_NUMBER number=${channel.number} name=${channel.name}")
+        Repo.requestPlay(channel)
     }
 
     private fun playFirst() {

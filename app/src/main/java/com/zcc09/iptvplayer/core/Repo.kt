@@ -413,6 +413,12 @@ object Repo {
     fun supportsVod(playlistId: String): Boolean =
         playlist(playlistId)?.type == PlaylistType.XTREAM
 
+    /** True when this playlist can produce a guide: Xtream, or any playlist with an XMLTV URL. */
+    fun hasEpg(playlistId: String): Boolean {
+        val p = playlist(playlistId) ?: return false
+        return p.type == PlaylistType.XTREAM || p.epgUrl.isNotBlank()
+    }
+
     suspend fun loadVodCategories(playlistId: String, kind: MediaKind): List<VodCategory> {
         val p = playlist(playlistId) ?: return emptyList()
         if (p.type != PlaylistType.XTREAM) return emptyList()

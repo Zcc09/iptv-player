@@ -243,6 +243,13 @@ if [ -n "${E2E_XC_USER:-}" ]; then
 fi
 show_log "SEED_"
 
+step "Custom EPG: an M3U playlist gets a guide from an XMLTV url"
+run_action epgm3u 60
+assert_log "E2E EPG_M3U streams=[1-9][0-9]* programs=[1-9][0-9]* missing=false" \
+  "the M3U playlist has a guide from its XMLTV url"
+assert_log "E2E EPG_M3U_SAMPLE channel=" "a programme row carries a real title"
+show_log "E2E EPG_M3U"
+
 step "Guide UI: the EPG tab, driven the way a viewer taps it"
 # Two independent proofs: the driver action fetches and parses the panel's
 # guide (fatal), and the tap proves the tab renders it (best effort - this
@@ -337,6 +344,26 @@ else
   # tap only covers rendering, and the emulator's UI automator drops the app often
   # enough that making it fatal reports emulator weather, not app bugs.
   echo "  ⚠️  could not tap the Movies tab on this run (UI automator instability) - the catalogue is proven above"
+fi
+
+step "Numeric zap: a channel number typed on the remote jumps to it"
+# Real key events, not a driver shortcut: pick a numbered channel, type its
+# number on the emulator, and let the app resolve the jump itself.
+run_action playnumbered 25
+ZAPNUM=$(echo "$LOG" | grep -oE "E2E PLAY_NUMBER number=[0-9]+" | tail -1 | cut -d= -f2)
+if [ -z "${ZAPNUM:-}" ]; then
+  fail "no numbered channel was found to zap to"
+else
+  pass "found a numbered channel to zap to (number $ZAPNUM)"
+  for d in $(echo "$ZAPNUM" | sed 's/./& /g'); do
+    # Android key codes: KEYCODE_0 = 7, so digit + 7.
+    timeout 30 adb shell input keyevent $((d + 7)) > /dev/null 2>&1 || true
+    sleep 0.3
+  done
+  sleep 3
+  refresh_log
+  assert_log "E2E ZAP number=$ZAPNUM" "typing $ZAPNUM on the remote jumped to that channel"
+  show_log "E2E ZAP"
 fi
 
 step "VOD playback (first film of the first non-empty category)"

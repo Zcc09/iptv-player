@@ -32,6 +32,12 @@ data class Playlist(
     val url: String = "",
     val username: String = "",
     val password: String = "",
+    /**
+     * Optional XMLTV guide URL. Xtream accounts serve their own guide; a plain
+     * M3U link has no EPG endpoint at all, so this is how those get a guide
+     * (`/xmltv.php` on the same panel, epgshare, etc.).
+     */
+    val epgUrl: String = "",
     val autoRefresh: Boolean = true,
     /** Minutes between background refreshes (15 minimum). */
     val refreshIntervalMinutes: Int = 360,

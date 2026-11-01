@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -93,6 +94,7 @@ import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.UrlTools
 import com.zcc09.iptvplayer.core.WatchHistory
+import com.zcc09.iptvplayer.core.Zap
 import com.zcc09.iptvplayer.player.Playback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -153,9 +155,9 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     // stale (10 min) and the line refreshes every minute.
     var epgNowNext by remember(channel.id) { mutableStateOf<Pair<String, String?>?>(null) }
     LaunchedEffect(channel.id) {
-        if (channel.streamId <= 0) return@LaunchedEffect
+        if (channel.streamId <= 0 && channel.epgId.isEmpty()) return@LaunchedEffect
         val pl = Repo.playlist(channel.playlistId) ?: return@LaunchedEffect
-        if (pl.type != PlaylistType.XTREAM) return@LaunchedEffect
+        if (!Repo.hasEpg(channel.playlistId)) return@LaunchedEffect
         EpgStore.refresh(pl)
         var announced = false
         while (true) {
@@ -360,6 +362,33 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
         showZapBanner = true
     }
 
+    // ------------------------------------------------------- numeric zap
+    // Channel numbers (tvg-chno / Xtream num) are what a remote types, so a
+    // short digit buffer with a timeout jumps straight to that channel - the
+    // convention on every TV box. OK commits early.
+    var zapBuffer by remember { mutableStateOf("") }
+
+    fun zapTo(buffer: String) {
+        val n = buffer.toIntOrNull() ?: return
+        val target = Zap.channelFor(siblings, buffer)
+        if (target != null) {
+            Logx.i("E2E ZAP number=$n channel=${target.name}")
+            Nav.replaceTop(Screen.Player(target, null))
+            showZapBanner = true
+        } else {
+            Logx.i("E2E ZAP_MISS number=$n")
+            Repo.postStatus("No channel $n")
+        }
+    }
+
+    LaunchedEffect(zapBuffer) {
+        if (zapBuffer.isEmpty()) return@LaunchedEffect
+        delay(1800)
+        val buffer = zapBuffer
+        zapBuffer = ""
+        zapTo(buffer)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -369,6 +398,12 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
+                        in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                            val digit = (keyEvent.nativeKeyEvent.keyCode - KeyEvent.KEYCODE_0)
+                                .toString().first()
+                            zapBuffer = Zap.push(zapBuffer, digit)
+                            true
+                        }
                         KeyEvent.KEYCODE_DPAD_UP,
                         KeyEvent.KEYCODE_CHANNEL_UP,
                         KeyEvent.KEYCODE_PAGE_UP -> {
@@ -384,7 +419,13 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
                         KeyEvent.KEYCODE_BUTTON_A -> {
-                            showTvOsd = !showTvOsd
+                            if (zapBuffer.isNotEmpty()) {
+                                val buffer = zapBuffer
+                                zapBuffer = ""
+                                zapTo(buffer)
+                            } else {
+                                showTvOsd = !showTvOsd
+                            }
                             true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT,
@@ -446,6 +487,25 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Numeric zap feedback: the digits typed on the remote before the jump.
+        if (zapBuffer.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 64.dp, end = 24.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xE6000000))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = zapBuffer,
+                    color = Color.White,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
         if (!pip) {
             Surface(

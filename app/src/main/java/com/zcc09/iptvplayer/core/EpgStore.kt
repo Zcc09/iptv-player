@@ -102,28 +102,36 @@ object EpgStore {
      * no-guide state.
      */
     suspend fun refresh(playlist: Playlist) {
-        if (playlist.type != PlaylistType.XTREAM) return
+        // Xtream accounts serve their own guide; anything else needs an explicit
+        // XMLTV URL (a plain M3U link has no EPG endpoint).
+        if (playlist.type != PlaylistType.XTREAM && playlist.epgUrl.isBlank()) return
         if (!isStale(playlist.id)) return
         synchronized(lock) { if (!refreshing.add(playlist.id)) return }
         try {
             val cache = withContext(Dispatchers.IO) {
-                val api = XtreamApi(
-                    playlist.url,
-                    playlist.username,
-                    playlist.password,
-                    Repo.userAgent
-                )
-                val today = LocalDate.now()
-                // XMLTV first: it is the endpoint self-hosted panels actually
-                // serve. `get_full_epg` remains as the fallback for XC panels
-                // that implement it and not /xmltv.php.
-                val xmltvXml = runCatching { api.xmltv() }.getOrNull()
-                val xml = if (!xmltvXml.isNullOrBlank() && xmltvXml.contains("<programme")) {
-                    xmltvXml
+                val xml = if (playlist.epgUrl.isNotBlank()) {
+                    // An explicit guide URL wins: it is the only option for an M3U
+                    // playlist and lets an Xtream account point at a better feed.
+                    runCatching { Http.getText(playlist.epgUrl, ua = Repo.userAgent) }.getOrNull()
                 } else {
-                    runCatching {
-                        api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
-                    }.getOrNull()
+                    val api = XtreamApi(
+                        playlist.url,
+                        playlist.username,
+                        playlist.password,
+                        Repo.userAgent
+                    )
+                    val today = LocalDate.now()
+                    // XMLTV first: it is the endpoint self-hosted panels actually
+                    // serve. `get_full_epg` remains as the fallback for XC panels
+                    // that implement it and not /xmltv.php.
+                    val xmltvXml = runCatching { api.xmltv() }.getOrNull()
+                    if (!xmltvXml.isNullOrBlank() && xmltvXml.contains("<programme")) {
+                        xmltvXml
+                    } else {
+                        runCatching {
+                            api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
+                        }.getOrNull()
+                    }
                 }
                 val programs = xml?.let { runCatching { EpgParser.parse(it) }.getOrNull() } ?: emptyMap()
                 EpgCache(

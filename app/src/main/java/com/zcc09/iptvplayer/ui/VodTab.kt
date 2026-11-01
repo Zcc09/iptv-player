@@ -87,17 +87,25 @@ private fun ChannelsTab.mediaKind(): MediaKind = when (this) {
 }
 
 @Composable
-internal fun VodTabRow(selected: ChannelsTab, showVodTabs: Boolean, onSelect: (ChannelsTab) -> Unit) {
+internal fun VodTabRow(
+    selected: ChannelsTab,
+    showVodTabs: Boolean,
+    showGuide: Boolean = showVodTabs,
+    onSelect: (ChannelsTab) -> Unit
+) {
     val tabs = buildList {
         add(ChannelsTab.LIVE)
+        // The guide is independent of the catalogue: an M3U playlist with an
+        // XMLTV URL has a guide but no films, an Xtream account has both.
+        if (showGuide) add(ChannelsTab.GUIDE)
         if (showVodTabs) {
-            add(ChannelsTab.GUIDE)
             add(ChannelsTab.MOVIE)
             add(ChannelsTab.SERIES)
         }
         add(ChannelsTab.RECORDINGS)
     }
-    TabRow(selectedTabIndex = tabs.indexOf(selected)) {
+    // A tab can disappear (playlist edited): never index with -1.
+    TabRow(selectedTabIndex = tabs.indexOf(selected).coerceAtLeast(0)) {
         tabs.forEach { tab ->
             Tab(
                 selected = tab == selected,
@@ -115,6 +123,7 @@ internal fun VodScreen(
     playlistId: String,
     tab: ChannelsTab,
     showVodTabs: Boolean,
+    showGuide: Boolean = showVodTabs,
     onTab: (ChannelsTab) -> Unit
 ) {
     val playlist = remember(playlistId) { Repo.playlist(playlistId) }
@@ -144,7 +153,7 @@ internal fun VodScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = tab, showVodTabs = showVodTabs, onSelect = onTab)
+            VodTabRow(selected = tab, showVodTabs = showVodTabs, showGuide = showGuide, onSelect = onTab)
             when {
                 tab == ChannelsTab.RECORDINGS -> RecordingsTabScreen()
                 tab == ChannelsTab.GUIDE -> GuideScreen(playlistId)

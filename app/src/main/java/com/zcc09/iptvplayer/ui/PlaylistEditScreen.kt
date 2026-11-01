@@ -55,6 +55,7 @@ fun PlaylistEditScreen(playlistId: String?) {
     var username by remember { mutableStateOf(existing?.username ?: "") }
     var password by remember { mutableStateOf(existing?.password ?: "") }
     var type by remember { mutableStateOf(existing?.type ?: PlaylistType.M3U) }
+    var epgUrl by remember { mutableStateOf(existing?.epgUrl ?: "") }
     var autoRefresh by remember { mutableStateOf(existing?.autoRefresh ?: true) }
     var interval by remember { mutableIntStateOf(existing?.refreshIntervalMinutes ?: 360) }
     var testing by remember { mutableStateOf(false) }
@@ -67,6 +68,7 @@ fun PlaylistEditScreen(playlistId: String?) {
         url = url.trim(),
         username = username.trim(),
         password = password,
+        epgUrl = epgUrl.trim(),
         autoRefresh = autoRefresh,
         refreshIntervalMinutes = interval,
         lastRefresh = existing?.lastRefresh ?: 0L,
@@ -151,6 +153,25 @@ fun PlaylistEditScreen(playlistId: String?) {
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = epgUrl,
+                onValueChange = { epgUrl = it },
+                label = { Text("EPG URL (XMLTV, optional)") },
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        if (type == PlaylistType.M3U) {
+                            "An M3U link carries no guide. Point this at the panel's " +
+                                "/xmltv.php — or any XMLTV url — to get one."
+                        } else {
+                            "Leave empty to use the account's own guide."
+                        }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

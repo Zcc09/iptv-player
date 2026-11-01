@@ -107,9 +107,10 @@ fun GuideScreen(playlistId: String, tv: Boolean = false) {
 
     Column(modifier = Modifier.fillMaxSize()) {
         when {
-            playlist?.type != PlaylistType.XTREAM -> CenteredNote(
+            playlist == null || !Repo.hasEpg(playlistId) -> CenteredNote(
                 title = "No programme guide",
-                body = "The guide is available for Xtream Codes accounts only."
+                body = "This playlist has no guide. Xtream accounts carry one, and any " +
+                    "playlist can use an XMLTV URL (Edit playlist → EPG URL)."
             )
 
             cache == null -> CenteredLoading("Loading guide…")

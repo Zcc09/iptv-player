@@ -67,12 +67,13 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
     // Xtream accounts expose films and series; a plain M3U link has no VOD API.
     // Recordings are global, so the tab row shows for every playlist.
     val vodAvailable = remember(playlistId) { Repo.supportsVod(playlistId) }
+    val epgAvailable = remember(playlistId) { Repo.hasEpg(playlistId) }
     var tab by remember(playlistId) { mutableStateOf(initialTab) }
 
     // Films, series and recordings live in their own screen tree; the live list
     // below is only rendered for the Live tab.
     if (tab != ChannelsTab.LIVE) {
-        VodScreen(playlistId, tab, vodAvailable) { tab = it }
+        VodScreen(playlistId, tab, vodAvailable, epgAvailable) { tab = it }
         return
     }
 
@@ -138,7 +139,7 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            VodTabRow(selected = tab, showVodTabs = vodAvailable, onSelect = { tab = it })
+            VodTabRow(selected = tab, showVodTabs = vodAvailable, showGuide = epgAvailable, onSelect = { tab = it })
             // A plain M3U link carries live channels only - a panel with a full
             // catalogue then looks live-only here. Say why instead of silently
             // hiding the tabs.
@@ -235,7 +236,7 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
                 ) {
                     items(shown, key = { it.id }) { channel ->
                         val nowPlaying =
-                            if (showNowPlaying && channel.streamId > 0) {
+                            if (showNowPlaying && (channel.epgId.isNotEmpty() || channel.streamId > 0)) {
                                 EpgStore.nowProgram(playlistId, channel, epgNowSec)?.title
                             } else {
                                 null
@@ -277,7 +278,21 @@ private fun ChannelRow(
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Channel numbers come from tvg-chno / Xtream num: they are what
+                // a remote types, so show them instead of hiding them.
+                if (channel.number > 0) {
+                    Text(
+                        text = channel.number.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .width(34.dp)
+                            .padding(end = 6.dp)
+                    )
+                }
+                Text(channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+            }
             nowPlaying?.let {
                 Text(
                     it,
