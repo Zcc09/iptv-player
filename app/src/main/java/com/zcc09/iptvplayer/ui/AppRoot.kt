@@ -53,6 +53,8 @@ fun AppRoot() {
     val isTvMode = remember(configuration, uiModePref, gamepadActive) {
         TvDetector.isTvMode(context, configuration, uiModePref, gamepadActive)
     }
+    // Window class + orientation: recomposes on rotate, resize and unfold.
+    val adaptive = rememberAdaptive(isTvMode)
 
     // Commands (UI or debug hooks) ask for a channel to start playing.
     LaunchedEffect(playRequest) {
@@ -78,19 +80,17 @@ fun AppRoot() {
     ) {
         when (val screen = Nav.current) {
             is Screen.Home -> {
-                // 600dp is the point where a channel list plus a 16:9 preview
-                // can share the width; below it (a folded phone at 353dp) the
-                // panes collapse and the split looks broken.
-                val isWide = configuration.screenWidthDp >= 600
-                if (isTvMode) {
-                    // The split layout needs a playlist to show; with none,
-                    // fall back to the TV home, which offers to add one.
-                    val firstPlaylist = Repo.playlists.collectAsState().value.firstOrNull()
-                    if (usePreviewPane && isWide && firstPlaylist != null) {
-                        TvSplitScreen(firstPlaylist.id)
-                    } else {
-                        TvHomeScreen()
-                    }
+                val firstPlaylist = Repo.playlists.collectAsState().value.firstOrNull()
+                // Two panes need a playlist; with none fall through to the
+                // screen that offers to add one.
+                if (usePreviewPane && adaptive.twoPane && firstPlaylist != null) {
+                    // Same layout on an unfolded foldable, a landscape phone and
+                    // a TV; only the scale changes (tenFoot = bigger targets).
+                    TvSplitScreen(firstPlaylist.id, tenFoot = adaptive.tenFoot)
+                } else if (isTvMode && !adaptive.stacked) {
+                    // TV mode forced on a phone-sized window keeps the phone
+                    // layout: a 353dp screen cannot carry the ten-foot grid.
+                    TvHomeScreen()
                 } else {
                     PlaylistsScreen()
                 }

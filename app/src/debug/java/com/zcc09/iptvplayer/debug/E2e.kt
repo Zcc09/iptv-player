@@ -83,6 +83,10 @@ object E2e : E2eHandler {
             "backup" -> backupProbe()
             "epgsrc" -> scope.launch { epgSourceProbe() }
             "dlna" -> scope.launch { dlnaProbe() }
+            "shot" -> scope.launch {
+                kotlinx.coroutines.delay(2_500)
+                capture(activity, extras["name"] ?: "shot")
+            }
             "playnumbered" -> playNumbered()
             "refresh" -> scope.launch {
                 val total = Repo.refreshAll()
@@ -704,6 +708,31 @@ object E2e : E2eHandler {
      * Real-hardware DLNA check: discover renderers on this Wi-Fi, log them, and
      * optionally cast the first channel to the first one (extra e2e_index=1).
      */
+    /**
+     * Render the current window to a PNG in filesDir.
+     *
+     * MagicOS refuses `adb exec-out screencap` for sideloaded apps, so layout
+     * verification on that device needs the app to take its own picture. Video
+     * surfaces stay black (they are separate layers); everything Compose draws
+     * - which is what a layout review is about - comes through.
+     */
+    private fun capture(activity: Activity, name: String) {
+        activity.runOnUiThread {
+            runCatching {
+                val root = activity.window.decorView
+                val w = root.width.takeIf { it > 0 } ?: 1080
+                val h = root.height.takeIf { it > 0 } ?: 1920
+                val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                root.draw(android.graphics.Canvas(bmp))
+                val dir = Repo.filesDir() ?: return@runOnUiThread
+                java.io.File(dir, "$name.png").outputStream().use {
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                Logx.i("E2E SHOT name=$name size=${w}x$h")
+            }.onFailure { Logx.e("E2E SHOT_FAILED", it) }
+        }
+    }
+
     private suspend fun dlnaProbe() {
         val report = StringBuilder()
         fun note(line: String) {

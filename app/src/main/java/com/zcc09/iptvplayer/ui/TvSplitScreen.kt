@@ -44,6 +44,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.zcc09.iptvplayer.core.Channel
+import com.zcc09.iptvplayer.core.EpgParser
 import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.player.Playback
@@ -60,7 +61,7 @@ import kotlinx.coroutines.delay
  * full-screen session, and it stays muted so a preview is not an ambush.
  */
 @Composable
-fun TvSplitScreen(playlistId: String) {
+fun TvSplitScreen(playlistId: String, tenFoot: Boolean = false) {
     val channels = remember(playlistId) { Repo.channelsOf(playlistId) }
     val playlist = remember(playlistId) { Repo.playlist(playlistId) }
     var selected by remember(playlistId) { mutableStateOf(channels.firstOrNull()) }
@@ -118,6 +119,7 @@ fun TvSplitScreen(playlistId: String) {
             items(channels, key = { it.id }) { channel ->
                 SplitChannelRow(
                     channel = channel,
+                    tenFoot = tenFoot,
                     selected = channel.id == selected?.id,
                     onFocus = { selected = channel },
                     onOpen = { Nav.push(Screen.Player(channel)) }
@@ -163,6 +165,10 @@ fun TvSplitScreen(playlistId: String) {
             NowNextBlock(playlistId = playlistId, channel = selected, nowSec = nowSec)
             Spacer(Modifier.height(10.dp))
             StreamFacts(preview = preview, channel = selected, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(14.dp))
+            // A tall pane (an opened foldable in portrait) would otherwise be
+            // half empty; the rest of the schedule is worth that space.
+            UpNextList(playlistId = playlistId, channel = selected, nowSec = nowSec)
         }
     }
 }
@@ -170,6 +176,7 @@ fun TvSplitScreen(playlistId: String) {
 @Composable
 private fun SplitChannelRow(
     channel: Channel,
+    tenFoot: Boolean,
     selected: Boolean,
     onFocus: () -> Unit,
     onOpen: () -> Unit
@@ -191,22 +198,74 @@ private fun SplitChannelRow(
             // Focus previews the channel; activating it opens the full player.
             // Without this the row was focusable but inert on a remote's OK.
             .clickable { onOpen() }
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+            // A remote needs a target you can see across a room; a thumb does not.
+            .padding(horizontal = if (tenFoot) 24.dp else 16.dp, vertical = if (tenFoot) 16.dp else 10.dp)
     ) {
         if (channel.number > 0) {
             Text(
                 text = channel.number.toString(),
-                style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+                style = (if (tenFoot) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.labelMedium)
+                    .copy(fontFamily = FontFamily.Monospace),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(38.dp)
             )
         }
         Text(
             text = channel.name,
-            style = MaterialTheme.typography.bodyLarge,
+            style = if (tenFoot) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1
         )
+    }
+}
+
+/** The rest of the schedule for the focused channel, filling a tall pane. */
+@Composable
+private fun UpNextList(playlistId: String, channel: Channel?, nowSec: Long) {
+    val upcoming = remember(channel?.id, nowSec) {
+        channel?.let { EpgStore.programsOf(EpgStore.flow(playlistId).value, it) }
+            ?.filter { it.startEpochSec > nowSec }
+            ?.take(6)
+            .orEmpty()
+    }
+    if (upcoming.isEmpty()) {
+        // A provider without a guide is normal; say so instead of leaving a void.
+        Text(
+            text = "No schedule for this channel",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+    Text(
+        text = "Up next",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(6.dp))
+    Column(Modifier.fillMaxWidth()) {
+        upcoming.forEach { program ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = EpgParser.formatHm(program.startEpochSec),
+                    style = MaterialTheme.typography.labelMedium
+                        .copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(58.dp)
+                )
+                Text(
+                    text = program.title.ifBlank { "—" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
