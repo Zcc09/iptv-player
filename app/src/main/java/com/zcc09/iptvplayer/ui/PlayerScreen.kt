@@ -84,6 +84,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.CastMode
+import com.zcc09.iptvplayer.core.CastSession
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.EpgParser
 import com.zcc09.iptvplayer.core.EpgStore
@@ -1010,180 +1011,76 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     }
 
     if (showCastDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showCastDialog = false
-                CastCtl.stopDiscovery()
+        val castState by CastSession.state.collectAsState()
+        val targets = buildList {
+            dlnaDevices.forEach { device ->
+                add(
+                    CastTarget(
+                        id = device.id,
+                        name = device.name,
+                        detail = listOfNotNull(device.model.takeIf { it.isNotBlank() }, "TV")
+                            .joinToString("  ·  "),
+                        kind = CastTarget.Kind.DLNA
+                    )
+                )
+            }
+            routes.forEach { route ->
+                add(
+                    CastTarget(
+                        id = route.id,
+                        name = route.name,
+                        detail = route.description.takeIf { it.isNotBlank() } ?: "Chromecast",
+                        kind = CastTarget.Kind.CHROMECAST
+                    )
+                )
+            }
+        }
+        CastSheet(
+            targets = targets,
+            searching = dlnaBusy,
+            casting = casting || castState.casting,
+            castingTo = when {
+                castState.casting -> castState.device
+                casting -> connectedDevice.ifBlank { "TV" }
+                else -> ""
             },
-            title = { Text("Cast to TV") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    if (!CastCtl.available) {
-                        Text(
-                            "Chromecast support needs Google Play Services, which is not " +
-                                "available on this device. Local playback still works.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        if (casting) {
-                            Text(
-                                "Connected to ${connectedDevice.ifBlank { "TV" }}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            TextButton(onClick = {
-                                CastCtl.disconnect()
-                                showCastDialog = false
-                            }) { Text("Stop casting") }
+            starting = castState.starting,
+            status = castState.error.ifBlank { dlnaStatus.orEmpty() },
+            onPick = { target ->
+                dlnaStatus = null
+                when (target.kind) {
+                    CastTarget.Kind.DLNA -> dlnaDevices.firstOrNull { it.id == target.id }
+                        ?.let { device ->
+                            // The TV takes over the picture; the phone must not
+                            // keep playing the same audio behind it.
+                            runCatching { exo.pause() }
+                            CastSession.start(device, channel, Repo.userAgent)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        if (routes.isEmpty()) {
-                            Text(
-                                "Searching for Cast devices on your Wi-Fi…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            routes.forEach { route ->
-                                TextButton(
-                                    onClick = {
-                                        CastCtl.connect(route)
-                                        showCastDialog = false
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(Modifier.fillMaxWidth()) {
-                                        Text(route.name, style = MaterialTheme.typography.bodyLarge)
-                                        if (route.description.isNotBlank()) {
-                                            Text(
-                                                route.description,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(14.dp))
-                        Text(
-                            "Network TVs",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "LG webOS, Samsung, Sony and Philips sets speak DLNA rather than " +
-                                "Chromecast. They must be on this Wi-Fi with their network/" +
-                                "media setting on.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        when {
-                            dlnaBusy -> Text(
-                                "Searching for network TVs…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            dlnaDevices.isEmpty() -> Text(
-                                "None found — you can retry by reopening this dialog.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            else -> dlnaDevices.forEach { device ->
-                                TextButton(
-                                    onClick = {
-                                        dlnaStatus = "Sending to ${device.name}…"
-                                        scope.launch {
-                                            // LG/Samsung DLNA only fetch plain HTTP and
-                                            // will not play HLS via AVTransport, so the
-                                            // relay republishes this channel as raw TS
-                                            // on the LAN and the TV plays that.
-                                            val castUrl = runCatching {
-                                                RelayManager.ensureTs(channel, Repo.userAgent)
-                                            }.getOrDefault(url)
-                                            val ok = Dlna.play(device, castUrl, channel.name)
-                                            dlnaStatus = if (ok) {
-                                                "Playing on ${device.name}"
-                                            } else {
-                                                "${device.name} refused the stream"
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(Modifier.fillMaxWidth()) {
-                                        Text(device.name, style = MaterialTheme.typography.bodyLarge)
-                                        Text(
-                                            listOfNotNull(
-                                                device.model.takeIf { it.isNotBlank() },
-                                                "DLNA"
-                                            ).joinToString("  ·  "),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        dlnaStatus?.let {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            when (Repo.castMode.value) {
-                                CastMode.AUTO ->
-                                    "Mode: Auto — HLS streams go straight to the TV, other " +
-                                        "formats are re-published as HLS from this phone."
-
-                                CastMode.DIRECT ->
-                                    "Mode: Direct — the raw stream URL is sent to the TV " +
-                                        "(most TVs cannot play raw MPEG-TS)."
-
-                                CastMode.RELAY ->
-                                    "Mode: Relay — this phone converts the stream to HLS and " +
-                                        "serves it to the TV."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "Tip: the TV must be on the same Wi-Fi as this phone.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    CastTarget.Kind.CHROMECAST -> {
+                        routes.firstOrNull { it.id == target.id }?.let { CastCtl.connect(it) }
+                        showCastDialog = false
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showCastDialog = false
-                    CastCtl.stopDiscovery()
-                }) { Text("Close") }
+            onStopCasting = {
+                CastSession.stop()
+                CastCtl.disconnect()
+                dlnaStatus = null
+            },
+            onSearchAgain = {
+                scope.launch {
+                    dlnaBusy = true
+                    dlnaDevices = runCatching { Dlna.discover() }.getOrDefault(emptyList())
+                    dlnaBusy = false
+                }
+            },
+            onDismiss = {
+                showCastDialog = false
+                CastCtl.stopDiscovery()
             }
         )
     }
 }
-
-/** Only ever called on API 26+. */
 private fun buildPipParams(): PictureInPictureParams {
     val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

@@ -19,8 +19,8 @@ android {
         applicationId = "com.zcc09.iptvplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "2.2.1"
+        versionCode = 18
+        versionName = "2.3.0"
         vectorDrawables.useSupportLibrary = false
     }
 

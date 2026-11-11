@@ -22,7 +22,9 @@ data class DlnaDevice(
     val name: String,
     val location: String,
     val controlUrl: String,
-    val model: String = ""
+    val model: String = "",
+    /** RenderingControl (volume/mute). Not every renderer exposes it. */
+    val renderingUrl: String = ""
 ) {
     /** Stable-ish identity for de-duplicating discovery responses. */
     val id: String get() = controlUrl.ifBlank { location }
@@ -76,8 +78,21 @@ object DlnaDescription {
             "[\\s\\S]{0,600}?<controlURL>([^<]+)</controlURL>",
         RegexOption.IGNORE_CASE
     )
+    private val SERVICES = Regex("<service>([\\s\\S]*?)</service>", RegexOption.IGNORE_CASE)
+    private val CONTROL_URL = Regex("<controlURL>([^<]+)</controlURL>", RegexOption.IGNORE_CASE)
     private val FRIENDLY_NAME = Regex("<friendlyName>([^<]*)</friendlyName>", RegexOption.IGNORE_CASE)
     private val MODEL_NAME = Regex("<modelName>([^<]*)</modelName>", RegexOption.IGNORE_CASE)
+
+    /** Control URL of the service block whose serviceType equals [serviceType]. */
+    fun controlUrlFor(xml: String, location: String, serviceType: String): String? {
+        for (block in SERVICES.findAll(xml)) {
+            val body = block.groupValues[1]
+            if (!body.contains(serviceType)) continue
+            val url = CONTROL_URL.find(body)?.groupValues?.get(1)?.trim().orEmpty()
+            if (url.isNotEmpty()) return resolve(location, url)
+        }
+        return null
+    }
 
     fun controlUrl(xml: String, location: String): String? {
         val raw = AV_SERVICE.find(xml)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -103,6 +118,19 @@ object DlnaSoap {
     const val SET_URI_ACTION = "$NS#SetAVTransportURI"
     const val PLAY_ACTION = "$NS#Play"
     const val STOP_ACTION = "$NS#Stop"
+
+    /** RenderingControl shares the envelope shape but not the service namespace. */
+    private const val RENDERING_NS = "urn:schemas-upnp-org:service:RenderingControl:1"
+
+    fun renderingBody(action: String, inner: String): String =
+        buildString {
+            append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+            append("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" ")
+            append("s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>")
+            append("<u:$action xmlns:u=\"$RENDERING_NS\">")
+            append(inner)
+            append("</u:$action></s:Body></s:Envelope>")
+        }
 
     private fun envelope(action: String, body: String): String = buildString {
         append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
@@ -230,7 +258,10 @@ object Dlna {
             name = DlnaDescription.friendlyName(xml),
             location = location,
             controlUrl = control,
-            model = DlnaDescription.modelName(xml)
+            model = DlnaDescription.modelName(xml),
+            renderingUrl = DlnaDescription.controlUrlFor(
+                xml, location, "urn:schemas-upnp-org:service:RenderingControl:1"
+            ).orEmpty()
         )
     }.getOrNull()
 
@@ -252,6 +283,35 @@ object Dlna {
             )
         }
 
+    private const val RENDERING = "urn:schemas-upnp-org:service:RenderingControl:1"
+    private val VOLUME = Regex("<CurrentVolume>(\\d+)</CurrentVolume>", RegexOption.IGNORE_CASE)
+
+    /**
+     * A cast lands on whatever the set's volume is, and a viewer reports "the
+     * picture works but there is no sound" when it is zero. Read the level and
+     * only ever *raise* a silent set: never lower or change a set that is
+     * already audible.
+     */
+    suspend fun ensureAudible(device: DlnaDevice): Boolean =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (device.renderingUrl.isBlank()) return@withContext false
+            val volume = soapRead(
+                device.renderingUrl, RENDERING + "#GetVolume",
+                DlnaSoap.renderingBody("GetVolume", "<InstanceID>0</InstanceID><Channel>Master</Channel>")
+            )
+            val level = VOLUME.find(volume)?.groupValues?.get(1)?.toIntOrNull() ?: return@withContext false
+            if (level > 0) return@withContext true
+            soapRead(
+                device.renderingUrl, RENDERING + "#SetMute",
+                DlnaSoap.renderingBody("SetMute", "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+            )
+            soapRead(
+                device.renderingUrl, RENDERING + "#SetVolume",
+                DlnaSoap.renderingBody("SetVolume", "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>15</DesiredVolume>")
+            )
+            true
+        }
+
     suspend fun stop(device: DlnaDevice): Boolean =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             if (device.controlUrl.isBlank()) return@withContext false
@@ -268,6 +328,37 @@ object Dlna {
         append("<upnp:class>object.item.videoItem</upnp:class>")
         append("<res protocolInfo=\"http-get:*:video/mp2t:*\">${DlnaSoap.escape(url)}</res>")
         append("</item></DIDL-Lite>")
+    }
+
+    private fun soapRead(
+        controlUrl: String,
+        action: String,
+        body: String,
+        readTimeoutMs: Int = 6000
+    ): String {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(controlUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 4000
+                readTimeout = readTimeoutMs
+                doOutput = true
+                setRequestProperty("Content-Type", "text/xml; charset=\"utf-8\"")
+                setRequestProperty("SOAPACTION", "\"$action\"")
+                setRequestProperty("User-Agent", Http.DEFAULT_UA)
+            }
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            runCatching {
+                (if (code in 200..299) conn.inputStream else conn.errorStream)
+                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            }.getOrDefault("")
+        } catch (t: Throwable) {
+            Logx.w("DLNA_READ ${action.substringAfter('#')} ${t.message}")
+            ""
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
     }
 
     private fun soap(
