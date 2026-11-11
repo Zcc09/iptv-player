@@ -924,7 +924,10 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                             }
                         }
 
-                        if (CastCtl.available) {
+                        // Always offered: DLNA TVs (LG, Samsung, Sony, Philips)
+                        // need no Play Services, so gating this on Chromecast
+                        // availability hid casting completely on such devices.
+                        run {
                             TvFocusableCard(
                                 onClick = { showCastDialog = true },
                                 shape = RoundedCornerShape(8.dp),
@@ -1095,7 +1098,14 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                                     onClick = {
                                         dlnaStatus = "Sending to ${device.name}…"
                                         scope.launch {
-                                            val ok = Dlna.play(device, url, channel.name)
+                                            // LG/Samsung DLNA only fetch plain HTTP and
+                                            // will not play HLS via AVTransport, so the
+                                            // relay republishes this channel as raw TS
+                                            // on the LAN and the TV plays that.
+                                            val castUrl = runCatching {
+                                                RelayManager.ensureTs(channel, Repo.userAgent)
+                                            }.getOrDefault(url)
+                                            val ok = Dlna.play(device, castUrl, channel.name)
                                             dlnaStatus = if (ok) {
                                                 "Playing on ${device.name}"
                                             } else {

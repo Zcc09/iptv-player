@@ -78,11 +78,15 @@ fun AppRoot() {
     ) {
         when (val screen = Nav.current) {
             is Screen.Home -> {
+                // 600dp is the point where a channel list plus a 16:9 preview
+                // can share the width; below it (a folded phone at 353dp) the
+                // panes collapse and the split looks broken.
+                val isWide = configuration.screenWidthDp >= 600
                 if (isTvMode) {
                     // The split layout needs a playlist to show; with none,
                     // fall back to the TV home, which offers to add one.
                     val firstPlaylist = Repo.playlists.collectAsState().value.firstOrNull()
-                    if (usePreviewPane && firstPlaylist != null) {
+                    if (usePreviewPane && isWide && firstPlaylist != null) {
                         TvSplitScreen(firstPlaylist.id)
                     } else {
                         TvHomeScreen()

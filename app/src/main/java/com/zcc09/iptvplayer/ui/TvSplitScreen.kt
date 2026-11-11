@@ -1,6 +1,7 @@
 package com.zcc09.iptvplayer.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,7 +101,7 @@ fun TvSplitScreen(playlistId: String) {
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .width(320.dp)
+                .weight(0.38f)
                 .fillMaxHeight()
                 .focusRequester(focusRequester)
                 .focusable(),
@@ -127,6 +128,7 @@ fun TvSplitScreen(playlistId: String) {
         // ---------------------------------------------------------------- preview
         Column(
             modifier = Modifier
+                .weight(0.62f)
                 .fillMaxHeight()
                 .padding(start = 16.dp, end = 20.dp, top = 12.dp, bottom = 16.dp)
         ) {
@@ -186,10 +188,10 @@ private fun SplitChannelRow(
             )
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
             .focusable()
+            // Focus previews the channel; activating it opens the full player.
+            // Without this the row was focusable but inert on a remote's OK.
+            .clickable { onOpen() }
             .padding(horizontal = 20.dp, vertical = 10.dp)
-            .then(
-                Modifier
-            )
     ) {
         if (channel.number > 0) {
             Text(

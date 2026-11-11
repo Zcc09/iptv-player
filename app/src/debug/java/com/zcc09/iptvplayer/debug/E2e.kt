@@ -4,6 +4,7 @@ import android.app.Activity
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.BackupCodec
+import com.zcc09.iptvplayer.core.Dlna
 import com.zcc09.iptvplayer.core.EpgSources
 import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.E2eHandler
@@ -81,6 +82,7 @@ object E2e : E2eHandler {
             "seed" -> scope.launch { seed() }
             "backup" -> backupProbe()
             "epgsrc" -> scope.launch { epgSourceProbe() }
+            "dlna" -> scope.launch { dlnaProbe() }
             "playnumbered" -> playNumbered()
             "refresh" -> scope.launch {
                 val total = Repo.refreshAll()
@@ -695,6 +697,39 @@ object E2e : E2eHandler {
             com.zcc09.iptvplayer.ui.Nav.push(com.zcc09.iptvplayer.ui.Screen.EpgSources)
         } catch (t: Throwable) {
             Logx.e("E2E EPG_SOURCE_FAILED", t)
+        }
+    }
+
+    /**
+     * Real-hardware DLNA check: discover renderers on this Wi-Fi, log them, and
+     * optionally cast the first channel to the first one (extra e2e_index=1).
+     */
+    private suspend fun dlnaProbe() {
+        val report = StringBuilder()
+        fun note(line: String) {
+            Logx.i(line)
+            report.append(line).append(System.lineSeparator())
+            runCatching {
+                java.io.File(Repo.filesDir() ?: return, "e2e_result.txt").writeText(report.toString())
+            }
+        }
+        try {
+            note("E2E DLNA_START")
+            val devices = Dlna.discover(timeoutMs = 6000)
+            note("E2E DLNA_DEVICES count=${devices.size}")
+            devices.forEach { d ->
+                note("E2E DLNA_DEVICE name=${d.name} model=${d.model} ctl=${d.controlUrl.take(80)}")
+            }
+            if (devices.isEmpty()) return
+            val channel = firstChannel() ?: run {
+                note("E2E DLNA_NO_CHANNEL"); return
+            }
+            val target = devices.first()
+            val ok = Dlna.play(target, channel.url, channel.name)
+            note("E2E DLNA_CAST device=${target.name} ok=$ok url=${channel.url.take(60)}")
+        } catch (t: Throwable) {
+            Logx.e("E2E DLNA_FAILED", t)
+            note("E2E DLNA_FAILED ${t.message}")
         }
     }
 

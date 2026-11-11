@@ -168,6 +168,9 @@ object Repo {
 
     fun newId(): String = UUID.randomUUID().toString().take(8)
 
+    /** App-private files dir, for diagnostics that must survive a lost logcat. */
+    fun filesDir(): java.io.File? = app?.filesDir
+
     fun add(playlist: Playlist) {
         _playlists.value = _playlists.value + playlist
         persistPlaylists()

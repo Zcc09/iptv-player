@@ -412,6 +412,9 @@ class TsSegmenter(
  */
 class HlsRelay {
 
+    /** Explicit CRLF so header literals survive any editor/tooling. */
+    private val CRLF = "\r\n"
+
     @Volatile
     var port: Int = 0
         private set
@@ -593,6 +596,14 @@ class HlsRelay {
                     writeBody(out, 200, "application/vnd.apple.mpegurl", body, method == "HEAD")
                 }
 
+                path.startsWith("/stream.ts") -> {
+                    // Plain MPEG-TS passthrough for DLNA renderers: LG and
+                    // Samsung refuse HTTPS and generally will not play HLS
+                    // through AVTransport, but they do play video/mp2t over
+                    // plain HTTP. Verified against an LG OLED65BXPVA.
+                    proxyTpStream(out, method)
+                }
+
                 path.startsWith("/seg/") -> {
                     val name = path.removePrefix("/seg/").substringBefore('?')
                     val seq = name.removeSuffix(".ts").toLongOrNull()
@@ -628,6 +639,46 @@ class HlsRelay {
         append("Access-Control-Allow-Headers: *\r\n")
         append("Connection: close\r\n")
         append("\r\n")
+    }
+
+    /** LAN url of the raw TS passthrough (DLNA). */
+    fun tsUrl(host: String): String = "http://$host:$port/stream.ts"
+
+    /** Pipe the upstream TS straight through, unsegmented. */
+    private fun proxyTpStream(out: java.io.OutputStream, method: String) {
+        val head = ("HTTP/1.1 200 OK" + CRLF +
+            "Content-Type: video/mp2t" + CRLF +
+            "Access-Control-Allow-Origin: *" + CRLF +
+            "Cache-Control: no-cache" + CRLF +
+            "Connection: close" + CRLF + CRLF).toByteArray(Charsets.UTF_8)
+        if (method == "HEAD") {
+            runCatching { out.write(head); out.flush() }
+            return
+        }
+        val (conn, input) = try {
+            Http.openStream(upstreamUrl, headers, 15000, 30000, userAgent)
+        } catch (t: Throwable) {
+            Logx.w("RELAY_TS_UPSTREAM_FAILED ${t.message}")
+            runCatching { out.write(("HTTP/1.1 502 Bad Gateway" + CRLF + "Connection: close" + CRLF + CRLF).toByteArray()) }
+            return
+        }
+        try {
+            out.write(head)
+            out.flush()
+            val buf = ByteArray(64 * 1024)
+            while (running) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                out.flush()
+                bytesIn += n
+            }
+        } catch (t: Throwable) {
+            Logx.w("RELAY_TS_CLIENT_GONE ${t.message}")
+        } finally {
+            runCatching { input.close() }
+            conn.disconnect()
+        }
     }
 
     private fun statusText(status: Int): String = when (status) {
@@ -686,6 +737,13 @@ object RelayManager {
             Logx.w("RELAY_NO_LAN_IP - the TV will not be able to reach the relay")
         }
         return url
+    }
+
+    /** Ensure the relay runs for [channel] and return the raw-TS url for DLNA TVs. */
+    fun ensureTs(channel: Channel, userAgent: String): String {
+        ensure(channel, userAgent)
+        val ip = Net.lanIp() ?: "127.0.0.1"
+        return relay?.tsUrl(ip) ?: channel.url
     }
 
     fun stop() {

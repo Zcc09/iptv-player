@@ -151,15 +151,21 @@ object Dlna {
         val socket = DatagramSocket()
         try {
             socket.broadcast = true
-            socket.soTimeout = 400
+            socket.soTimeout = 300
             val msg = Ssdp.searchMessage().toByteArray(Charsets.UTF_8)
-            val target = InetSocketAddress(InetAddress.getByName(Ssdp.ADDRESS), Ssdp.PORT)
+            val multicast = InetSocketAddress(InetAddress.getByName(Ssdp.ADDRESS), Ssdp.PORT)
             repeat(3) {
-                runCatching { socket.send(DatagramPacket(msg, msg.size, target)) }
+                runCatching { socket.send(DatagramPacket(msg, msg.size, multicast)) }
             }
+            // LG webOS (verified on an OLED65BXPVA) answers a *unicast* M-SEARCH
+            // and ignores the multicast one, so a multicast-only search finds
+            // nothing on those sets. Sweep the local /24 as well.
             val deadline = System.currentTimeMillis() + timeoutMs
             val buf = ByteArray(4096)
-            while (System.currentTimeMillis() < deadline) {
+
+            // Phase 1: multicast window.
+            val multicastDeadline = System.currentTimeMillis() + (timeoutMs / 2)
+            while (System.currentTimeMillis() < multicastDeadline) {
                 val packet = DatagramPacket(buf, buf.size)
                 try {
                     socket.receive(packet)
@@ -168,20 +174,52 @@ object Dlna {
                 } catch (_: IOException) {
                     break
                 }
-                val raw = String(packet.data, 0, packet.length, Charsets.UTF_8)
-                val location = Ssdp.locationOf(raw) ?: continue
-                if (found.containsKey(location)) continue
-                val device = if (fetchDetails) describe(location) else DlnaDevice(
-                    name = "Network TV",
-                    location = location,
-                    controlUrl = ""
-                )
-                found[location] = device ?: continue
+                collect(packet, found, fetchDetails)
+            }
+
+            // Phase 2: unicast to every host on our own subnet.
+            // Net.lanIp() skips cellular (rmnet/ccmni) and VPN tunnels; a plain
+            // "first IPv4" picked rmnet_data2 on a real phone and swept the
+            // carrier's subnet, finding nothing.
+            val localIp = runCatching { Net.lanIp() }.getOrNull()
+            if (localIp != null) {
+                val prefix = localIp.substringBeforeLast('.')
+                for (host in 1..254) {
+                    val address = "$prefix.$host"
+                    if (address == localIp) continue
+                    runCatching {
+                        socket.send(DatagramPacket(msg, msg.size, InetSocketAddress(address, Ssdp.PORT)))
+                    }
+                }
+                socket.soTimeout = 400
+                while (System.currentTimeMillis() < deadline) {
+                    val packet = DatagramPacket(buf, buf.size)
+                    try {
+                        socket.receive(packet)
+                    } catch (_: SocketTimeoutException) {
+                        continue
+                    } catch (_: IOException) {
+                        break
+                    }
+                    collect(packet, found, fetchDetails)
+                }
             }
         } finally {
             runCatching { socket.close() }
         }
         found.values.toList()
+    }
+
+    private fun collect(packet: DatagramPacket, found: MutableMap<String, DlnaDevice>, fetchDetails: Boolean) {
+        val raw = String(packet.data, 0, packet.length, Charsets.UTF_8)
+        val location = Ssdp.locationOf(raw) ?: return
+        if (found.containsKey(location)) return
+        val device = if (fetchDetails) {
+            describe(location)
+        } else {
+            DlnaDevice(name = "Network TV", location = location, controlUrl = "")
+        }
+        if (device != null) found[location] = device
     }
 
     /** Fetch and read a device description. Null when it does not expose AVTransport. */
@@ -201,9 +239,17 @@ object Dlna {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             if (device.controlUrl.isBlank()) return@withContext false
             val metadata = didl(title, url)
-            val set = soap(device.controlUrl, DlnaSoap.SET_URI_ACTION, DlnaSoap.setUriBody(url, metadata))
+            val set = soap(
+                device.controlUrl, DlnaSoap.SET_URI_ACTION, DlnaSoap.setUriBody(url, metadata),
+                readTimeoutMs = 12_000
+            )
             if (!set) return@withContext false
-            soap(device.controlUrl, DlnaSoap.PLAY_ACTION, DlnaSoap.playBody())
+            // LG answers Play only after it has opened the stream: measured over
+            // 8s on an OLED65BXPVA, so a slow answer is not a refusal.
+            soap(
+                device.controlUrl, DlnaSoap.PLAY_ACTION, DlnaSoap.playBody(),
+                readTimeoutMs = 20_000, lenientOnTimeout = true
+            )
         }
 
     suspend fun stop(device: DlnaDevice): Boolean =
@@ -224,13 +270,19 @@ object Dlna {
         append("</item></DIDL-Lite>")
     }
 
-    private fun soap(controlUrl: String, action: String, body: String): Boolean {
+    private fun soap(
+        controlUrl: String,
+        action: String,
+        body: String,
+        readTimeoutMs: Int = 8000,
+        lenientOnTimeout: Boolean = false
+    ): Boolean {
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL(controlUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 5000
-                readTimeout = 8000
+                readTimeout = readTimeoutMs
                 doOutput = true
                 setRequestProperty("Content-Type", "text/xml; charset=\"utf-8\"")
                 setRequestProperty("SOAPACTION", "\"$action\"")
@@ -245,6 +297,10 @@ object Dlna {
             val failed = DlnaSoap.failed(code, text)
             Logx.i("DLNA ${action.substringAfter('#')} code=$code failed=$failed")
             !failed
+        } catch (t: java.net.SocketTimeoutException) {
+            // The TV acted on it; it just did not answer in time.
+            Logx.i("DLNA ${action.substringAfter('#')} timed-out-but-sent")
+            lenientOnTimeout
         } catch (t: Throwable) {
             Logx.w("DLNA_CALL_FAILED ${action.substringAfter('#')}: ${t.message}")
             false
