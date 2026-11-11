@@ -66,6 +66,9 @@ object CastSession {
         server = srv
         val base = "http://${Net.lanIp() ?: return}:$port"
         activeChannelId = channel.id
+        // Needed by stop(): without it "Stop casting" would only stop the local
+        // side and leave the TV playing.
+        currentDevice = device
         _state.value = State(starting = true, device = device.name)
 
         job = scope.launch {
