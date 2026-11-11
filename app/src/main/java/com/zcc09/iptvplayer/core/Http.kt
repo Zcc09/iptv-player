@@ -62,7 +62,8 @@ object Http {
         val conn = open(url, headers, timeoutMs, timeoutMs, ua)
         try {
             val code = conn.responseCode
-            val body = readFully(if (code in 200..299) conn.inputStream else conn.errorStream)
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = readFully(stream, gzipped = conn.contentEncoding?.contains("gzip") == true)
             if (code !in 200..299) {
                 val snippet = body.take(180).replace('\n', ' ')
                 throw IOException("HTTP $code from $url :: $snippet")
@@ -118,15 +119,26 @@ object Http {
         }
     }
 
-    private fun readFully(input: InputStream?): String {
+    /**
+     * Read a whole body as UTF-8. Public guides are often served as a `.xml.gz`
+     * (or with `Content-Encoding: gzip`), so a gzip body is inflated rather than
+     * parsed as binary noise.
+     */
+    private fun readFully(input: InputStream?, gzipped: Boolean = false): String {
         if (input == null) return ""
-        return input.use { stream ->
+        return input.use { raw ->
+            val peeked = java.io.PushbackInputStream(raw, 2)
+            val magic = ByteArray(2)
+            val n = peeked.read(magic)
+            if (n > 0) peeked.unread(magic, 0, n)
+            val isGzip = gzipped || (n == 2 && magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte())
+            val stream: InputStream = if (isGzip) java.util.zip.GZIPInputStream(peeked) else peeked
             val buf = ByteArray(16 * 1024)
             val sb = StringBuilder()
             while (true) {
-                val n = stream.read(buf)
-                if (n < 0) break
-                sb.append(String(buf, 0, n, Charsets.UTF_8))
+                val read = stream.read(buf)
+                if (read < 0) break
+                sb.append(String(buf, 0, read, Charsets.UTF_8))
             }
             sb.toString()
         }

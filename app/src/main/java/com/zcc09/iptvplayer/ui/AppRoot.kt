@@ -89,6 +89,7 @@ fun AppRoot() {
             is Screen.Series -> SeriesScreen(screen.playlistId, screen.seriesId, screen.title)
             is Screen.Recordings -> RecordingsScreen()
             is Screen.Settings -> SettingsScreen()
+            is Screen.EpgSources -> EpgSourcesScreen()
         }
 
         StatusBanner(text = status, modifier = Modifier.align(Alignment.BottomCenter))

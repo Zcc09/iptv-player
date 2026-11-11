@@ -257,6 +257,17 @@ assert_log "E2E BACKUP bytes=[0-9]+ playlists=[1-9][0-9]*" \
 assert_log "E2E BACKUP_REJECT junk=true" "a file that is not a backup is rejected"
 show_log "E2E BACKUP"
 
+step "XMLTV guides: add a public guide, then look at the screen"
+# Real download through the app's HTTP path (this feed is gzipped), then the
+# screen opens so the screenshot shows real counts instead of an empty list.
+run_action epgsrc 90
+assert_log "E2E EPG_SOURCE ok=true channels=[1-9][0-9]* programs=[1-9][0-9]*" \
+  "a public XMLTV guide downloaded and parsed"
+assert_log "E2E EPG_SOURCE_MERGE channels=[1-9][0-9]* programs=[1-9][0-9]*" \
+  "its programmes are ready to merge into the guide"
+show_log "E2E EPG_SOURCE"
+shot 7-guide-sources
+
 step "Guide UI: the EPG tab, driven the way a viewer taps it"
 # Two independent proofs: the driver action fetches and parses the panel's
 # guide (fatal), and the tap proves the tab renders it (best effort - this

@@ -17,6 +17,9 @@ sealed class Screen {
     /** 10-foot recordings list (TV home tile); phones use the Recordings tab. */
     data object Recordings : Screen()
     data object Settings : Screen()
+
+    /** Extra XMLTV guides, shared by every playlist. */
+    data object EpgSources : Screen()
 }
 
 /** Tiny hand-rolled back stack - the app has five screens and no deep links. */

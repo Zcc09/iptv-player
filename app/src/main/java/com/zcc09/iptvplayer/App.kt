@@ -3,6 +3,7 @@ package com.zcc09.iptvplayer
 import android.app.Application
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.DebugHooks
+import com.zcc09.iptvplayer.core.EpgSources
 import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.Logx
 import com.zcc09.iptvplayer.core.Repo
@@ -14,6 +15,7 @@ class App : Application() {
         super.onCreate()
         Repo.init(this)
         EpgStore.init(this)
+        EpgSources.init(this)
         Logx.i("APP_STARTED version=${BuildConfig.VERSION_NAME} debug=${BuildConfig.DEBUG}")
         DebugHooks.install()
         CastCtl.init(this)

@@ -134,10 +134,13 @@ object EpgStore {
                     }
                 }
                 val programs = xml?.let { runCatching { EpgParser.parse(it) }.getOrNull() } ?: emptyMap()
+                // Guides the viewer added app-wide fill channels the provider
+                // left without a schedule; the provider's own data wins.
+                val merged = EpgMerge.merge(programs, EpgSources.cachedMerged())
                 EpgCache(
                     fetchedAt = System.currentTimeMillis(),
-                    missing = programs.isEmpty(),
-                    programs = programs
+                    missing = merged.isEmpty(),
+                    programs = merged
                 )
             }
             if (cache.missing) Logx.i("E2E EPG_MISSING playlist=${playlist.id}")

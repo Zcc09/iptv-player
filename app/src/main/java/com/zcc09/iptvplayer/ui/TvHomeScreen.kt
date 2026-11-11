@@ -288,12 +288,10 @@ fun TvHomeScreen() {
                             )
                             if (vodAvailable) {
                                 TvQuickTile(
-                                    icon = "🎞️",
                                     label = "Movies",
                                     detail = "Films on demand"
                                 ) { Nav.push(Screen.Channels(activePlaylistId, ChannelsTab.MOVIE)) }
                                 TvQuickTile(
-                                    icon = "📺",
                                     label = "Shows",
                                     detail = "Series & episodes"
                                 ) { Nav.push(Screen.Channels(activePlaylistId, ChannelsTab.SERIES)) }
@@ -853,16 +851,21 @@ private fun TvChannelCard(
 @Composable
 private fun TvRecordingsTile(count: Int, onOpen: () -> Unit) {
     TvQuickTile(
-        icon = "🎬",
         label = "Recordings",
         detail = "$count file${if (count == 1) "" else "s"}",
         onClick = onOpen
     )
 }
 
-/** A 10-foot quick-access tile: icon, label and a one-line detail. */
+/**
+ * A 10-foot quick-access tile: label and a one-line detail.
+ *
+ * No icon - at ten feet the label is the icon, and a glyph beside it only
+ * competes with the type. Focus is shown by a thin accent bar, the same green
+ * the rest of the app uses for "live".
+ */
 @Composable
-private fun TvQuickTile(icon: String, label: String, detail: String, onClick: () -> Unit) {
+private fun TvQuickTile(label: String, detail: String, onClick: () -> Unit) {
     TvFocusableCard(
         onClick = onClick,
         modifier = Modifier
@@ -871,20 +874,19 @@ private fun TvQuickTile(icon: String, label: String, detail: String, onClick: ()
     ) { isFocused ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = icon,
-                fontSize = 20.sp,
-                modifier = Modifier.padding(end = 12.dp)
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(28.dp)
+                    .background(if (isFocused) Color(0xFF4CAF7D) else Color.Transparent)
             )
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.padding(start = 14.dp)) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isFocused) FontWeight.Medium else FontWeight.Normal,
                     color = Color.White
                 )
                 Text(

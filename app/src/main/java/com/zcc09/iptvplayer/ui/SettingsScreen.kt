@@ -410,7 +410,26 @@ fun SettingsScreen() {
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
-            // -------------------------------------------------- backup & restore
+            // -------------------------------------------------- guide sources
+            Text("TV guide sources", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Add a public XMLTV guide for channels your provider leaves without a schedule. " +
+                    "Your provider's own guide always wins where it exists.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = { Nav.push(Screen.EpgSources) }) {
+                    Text("Manage guides")
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(

@@ -53,6 +53,7 @@ import com.zcc09.iptvplayer.core.Logx
 import com.zcc09.iptvplayer.core.PlaylistType
 import com.zcc09.iptvplayer.core.Repo
 import kotlinx.coroutines.delay
+import com.zcc09.iptvplayer.core.EpgSources
 import kotlinx.coroutines.launch
 
 /**
@@ -91,6 +92,9 @@ fun GuideScreen(playlistId: String, tv: Boolean = false) {
     // Refresh the guide when stale (the store no-ops within 10 minutes) and
     // tick a minute clock so the NOW marker and current programme advance.
     LaunchedEffect(playlistId) {
+        // Guides the viewer added app-wide refresh themselves when stale; the
+        // playlist's own guide is what this screen waits for.
+        launch { runCatching { EpgSources.refreshStale() } }
         playlist?.let { EpgStore.refresh(it) }
         while (true) {
             delay(60_000)

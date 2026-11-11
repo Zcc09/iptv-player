@@ -4,6 +4,7 @@ import android.app.Activity
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.BackupCodec
+import com.zcc09.iptvplayer.core.EpgSources
 import com.zcc09.iptvplayer.core.EpgStore
 import com.zcc09.iptvplayer.core.E2eHandler
 import com.zcc09.iptvplayer.core.Episode
@@ -51,6 +52,9 @@ object E2e : E2eHandler {
 
     private const val M3U_ID = "ci-m3u"
     private const val XC_ID = "ci-xc"
+    /** Public gzipped XMLTV feed: small, real, and it exercises gzip inflation. */
+    private const val EPG_SOURCE_URL =
+        "https://epgshare01.online/epgshare01/epg_ripper_AE1.xml.gz"
     /** Panel root, used to build an XMLTV url for the M3U playlist. */
     private const val XC_BASE = "https://tv.mojangle.net"
 
@@ -76,6 +80,7 @@ object E2e : E2eHandler {
         when (action.lowercase()) {
             "seed" -> scope.launch { seed() }
             "backup" -> backupProbe()
+            "epgsrc" -> scope.launch { epgSourceProbe() }
             "playnumbered" -> playNumbered()
             "refresh" -> scope.launch {
                 val total = Repo.refreshAll()
@@ -667,6 +672,30 @@ object E2e : E2eHandler {
         val preferred = Repo.playlists.value.firstOrNull { it.id == M3U_ID }
             ?: Repo.playlists.value.firstOrNull()
         return preferred?.let { Repo.channelsOf(it.id).firstOrNull() }
+    }
+
+    /**
+     * Add a public XMLTV guide, fetch it through the app's own HTTP path (this
+     * feed is gzipped, so it also proves the inflation), log what it produced,
+     * then open the screen so a screenshot can be taken of real data.
+     */
+    private suspend fun epgSourceProbe() {
+        try {
+            val source = EpgSources.add("E2E public guide", EPG_SOURCE_URL)
+            val tested = EpgSources.test(source)
+            Logx.i(
+                "E2E EPG_SOURCE ok=${tested.lastOk} channels=${tested.channelCount} " +
+                    "programs=${tested.programCount} err=${tested.lastError.take(60)}"
+            )
+            val merged = EpgSources.cachedMerged()
+            Logx.i(
+                "E2E EPG_SOURCE_MERGE channels=${merged.size} " +
+                    "programs=${merged.values.sumOf { it.size }}"
+            )
+            com.zcc09.iptvplayer.ui.Nav.push(com.zcc09.iptvplayer.ui.Screen.EpgSources)
+        } catch (t: Throwable) {
+            Logx.e("E2E EPG_SOURCE_FAILED", t)
+        }
     }
 
     /**
