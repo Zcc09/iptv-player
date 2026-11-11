@@ -56,6 +56,7 @@ fun PlaylistEditScreen(playlistId: String?) {
     var password by remember { mutableStateOf(existing?.password ?: "") }
     var type by remember { mutableStateOf(existing?.type ?: PlaylistType.M3U) }
     var epgUrl by remember { mutableStateOf(existing?.epgUrl ?: "") }
+    var localUrl by remember { mutableStateOf(existing?.localUrl ?: "") }
     var autoRefresh by remember { mutableStateOf(existing?.autoRefresh ?: true) }
     var interval by remember { mutableIntStateOf(existing?.refreshIntervalMinutes ?: 360) }
     var testing by remember { mutableStateOf(false) }
@@ -69,6 +70,7 @@ fun PlaylistEditScreen(playlistId: String?) {
         username = username.trim(),
         password = password,
         epgUrl = epgUrl.trim(),
+        localUrl = localUrl.trim(),
         autoRefresh = autoRefresh,
         refreshIntervalMinutes = interval,
         lastRefresh = existing?.lastRefresh ?: 0L,
@@ -168,6 +170,22 @@ fun PlaylistEditScreen(playlistId: String?) {
                         } else {
                             "Leave empty to use the account's own guide."
                         }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = localUrl,
+                onValueChange = { localUrl = it },
+                label = { Text("Local (LAN) address, optional") },
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        "The same server on your own network, e.g. http://192.168.0.172:30356. " +
+                            "Used only when this device is on that network — at home it avoids " +
+                            "routing your channels out to the internet and back."
                     )
                 },
                 modifier = Modifier.fillMaxWidth()

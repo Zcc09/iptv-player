@@ -737,6 +737,9 @@ object E2e : E2eHandler {
 
     /** Speed-test the first playlist and record the line a viewer would see. */
     private suspend fun speedProbe() {
+        // Playlists load off the main thread; give the store a moment or the
+        // probe races an empty list.
+        kotlinx.coroutines.delay(4_000)
         val playlist = Repo.playlists.value.firstOrNull() ?: run {
             Logx.w("E2E SPEED_NO_PLAYLIST"); return
         }
@@ -746,7 +749,8 @@ object E2e : E2eHandler {
                 .writeText("E2E SPEED_START target=" + target.take(70) + System.lineSeparator())
         }
         val result = SpeedTest.run(target)
-        val line = SpeedTest.describe(result)
+        val host = runCatching { java.net.URI(target).host }.getOrNull() ?: "?"
+        val line = "host=" + host + " | " + SpeedTest.describe(result)
         Logx.i("E2E SPEED ${playlist.name} :: $line")
         runCatching {
             java.io.File(Repo.filesDir() ?: return, "e2e_result.txt").writeText(line)

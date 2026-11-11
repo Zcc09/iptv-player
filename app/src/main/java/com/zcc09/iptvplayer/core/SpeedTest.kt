@@ -27,7 +27,7 @@ data class SpeedResult(
 object SpeedTest {
 
     /** How long to sample. Long enough to fill the pipe, short enough to wait for. */
-    const val SAMPLE_MS = 5000L
+    const val SAMPLE_MS = 8000L
 
     /** A rough ceiling, so a fast line cannot spin forever on a huge file. */
     private const val MAX_BYTES = 64L * 1024 * 1024

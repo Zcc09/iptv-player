@@ -367,6 +367,38 @@ object Repo {
         }
     }
 
+    /**
+     * Point stream urls at the playlist's LAN address when one is set and this
+     * device shares that subnet. Everything downstream - player, relay, cast,
+     * recording - then uses the local path without each of them knowing.
+     */
+    private fun applyLocalRoute(p: Playlist, channels: List<Channel>): List<Channel> {
+        if (p.localUrl.isBlank() || !onSameLan(p.localUrl)) return channels
+        val publicHost = runCatching { java.net.URI(p.url).host }.getOrNull() ?: return channels
+        val local = p.localUrl.trim().trimEnd('/')
+        if (local.isBlank()) return channels
+        var rewritten = 0
+        val out = channels.map { ch ->
+            val replaced = when {
+                ch.url.contains("://$publicHost") -> {
+                    rewritten++
+                    ch.url.replace("https://$publicHost", local).replace("http://$publicHost", local)
+                }
+                else -> ch.url
+            }
+            if (replaced == ch.url) ch else ch.copy(url = replaced)
+        }
+        if (rewritten > 0) Logx.i("LOCAL_ROUTE playlist=${p.name} channels=$rewritten base=$local")
+        return out
+    }
+
+    /** True when [url]'s host sits on this device's own subnet. */
+    fun onSameLan(url: String): Boolean {
+        val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return false
+        val local = runCatching { Net.lanIp() }.getOrNull() ?: return false
+        return host.substringBeforeLast('.') == local.substringBeforeLast('.')
+    }
+
     /** Refresh one playlist and persist the outcome. Returns the refreshed channels. */
     suspend fun refresh(playlistId: String): RefreshResult {
         val p = playlist(playlistId) ?: return RefreshResult(emptyList(), error = "Unknown playlist")
@@ -374,8 +406,9 @@ object Repo {
         return try {
             val result = fetch(p)
             if (result.ok) {
-                _channels.value = _channels.value + (playlistId to result.channels)
-                writeChannelCache(playlistId, result.channels)
+                val routed = applyLocalRoute(p, result.channels)
+                _channels.value = _channels.value + (playlistId to routed)
+                writeChannelCache(playlistId, routed)
             }
             val updated = p.copy(
                 lastRefresh = System.currentTimeMillis(),

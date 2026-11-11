@@ -38,6 +38,12 @@ data class Playlist(
      * (`/xmltv.php` on the same panel, epgshare, etc.).
      */
     val epgUrl: String = "",
+    /**
+     * Same server reached directly on the LAN (e.g. http://192.168.0.172:30356).
+     * Used only when this device is on that subnet: at home it skips the trip
+     * out to the WAN and back, which is what makes zapping feel slow.
+     */
+    val localUrl: String = "",
     val autoRefresh: Boolean = true,
     /** Minutes between background refreshes (15 minimum). */
     val refreshIntervalMinutes: Int = 360,
