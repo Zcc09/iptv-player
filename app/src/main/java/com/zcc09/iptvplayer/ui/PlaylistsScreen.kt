@@ -67,7 +67,8 @@ fun PlaylistsScreen() {
                         Repo.setUiMode(AppUiMode.TV)
                         Repo.postStatus("Switched to Android TV & Gamepad mode")
                     }) {
-                        Text("📺 TV Mode")
+                        // No emoji in the chrome: the label says it.
+                        Text("TV mode")
                     }
                     IconButton(onClick = {
                         Repo.postStatus("Refreshing all playlists…")
@@ -174,16 +175,17 @@ private fun PlaylistCard(
                     Text(playlist.name, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AssistChip(
-                            onClick = { },
-                            label = {
-                                Text(if (playlist.type == PlaylistType.XTREAM) "XTREAM" else "M3U")
-                            }
+                        // Sentence case, quiet text: an uppercase chip badge is
+                        // chrome shouting about something that never changes.
+                        Text(
+                            text = if (playlist.type == PlaylistType.XTREAM) "Xtream account" else "M3U playlist",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "$channelCount channels",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "·  $channelCount channels",
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

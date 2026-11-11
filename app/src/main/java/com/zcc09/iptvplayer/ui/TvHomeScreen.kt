@@ -465,7 +465,7 @@ private fun TvTopBar(
                     Text(
                         text = " • $channelCount channels",
                         fontSize = 13.sp,
-                        color = Color(0xFF94A3B8)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -479,7 +479,7 @@ private fun TvTopBar(
                 text = currentTime,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF94A3B8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 16.dp)
             )
         }
@@ -494,7 +494,7 @@ private fun TvTopBar(
             )
         } else {
             IconButton(onClick = onRefresh) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh channels", tint = Color(0xFF94A3B8))
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh channels", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -508,7 +508,7 @@ private fun TvTopBar(
 
         // Settings Button
         IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF94A3B8))
+            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -706,7 +706,7 @@ private fun TvChannelSpotlight(
                         )
                         if (isFavorite) {
                             Spacer(Modifier.width(8.dp))
-                            Text(text = "★ FAVOURITE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFBBF24))
+                            Text(text = "★ FAVOURITE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                         }
                     }
 
@@ -716,24 +716,19 @@ private fun TvChannelSpotlight(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (channel.group.isNotBlank()) {
-                            Text(
-                                text = channel.group,
-                                fontSize = 13.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
-                        TvBadge(text = "LIVE", color = Color(0xFFEF4444))
-                        if (channel.name.contains("4K", ignoreCase = true)) {
-                            TvBadge(text = "4K UHD", color = Color(0xFF10B981))
-                        } else {
-                            TvBadge(text = "HD", color = Color(0xFF0284C7))
-                        }
-                        if (channel.url.contains(".m3u8", ignoreCase = true)) {
-                            TvBadge(text = "HLS", color = Color(0xFF8B5CF6))
-                        } else {
-                            TvBadge(text = "TS", color = Color(0xFFF59E0B))
-                        }
+                        // One quiet meta line instead of five coloured badges:
+                        // group, resolution and container are facts, not statuses,
+                        // and colour here only competed with the channel name.
+                        val meta = buildList {
+                            if (channel.group.isNotBlank()) add(channel.group)
+                            add(if (channel.name.contains("4K", ignoreCase = true)) "4K UHD" else "HD")
+                            add(if (channel.url.contains(".m3u8", ignoreCase = true)) "HLS" else "TS")
+                        }.joinToString("  ·  ")
+                        Text(
+                            text = meta,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     Spacer(Modifier.height(8.dp))
@@ -745,10 +740,10 @@ private fun TvChannelSpotlight(
                             RemoteButtonHint(
                                 buttonLabel = "Y",
                                 actionName = if (isFavorite) "Remove Favourite" else "Add Favourite",
-                                buttonColor = Color(0xFF475569)
+                                buttonColor = MaterialTheme.colorScheme.outline
                             )
                             Spacer(Modifier.width(12.dp))
-                            RemoteButtonHint(buttonLabel = "X", actionName = "Search", buttonColor = Color(0xFF475569))
+                            RemoteButtonHint(buttonLabel = "X", actionName = "Search", buttonColor = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
@@ -812,11 +807,11 @@ private fun TvChannelCard(
                     url = channel.logo,
                     contentDescription = channel.name,
                     size = 40.dp,
-                    modifier = Modifier.background(Color(0xFF1B2332), RoundedCornerShape(6.dp))
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
                 )
                 Spacer(Modifier.weight(1f))
                 if (isFavorite) {
-                    Text(text = "★", fontSize = 16.sp, color = Color(0xFFFBBF24))
+                    Text(text = "★", fontSize = 16.sp, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
 
@@ -835,7 +830,7 @@ private fun TvChannelCard(
                     Text(
                         text = channel.group,
                         fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -880,7 +875,7 @@ private fun TvQuickTile(label: String, detail: String, onClick: () -> Unit) {
                 modifier = Modifier
                     .width(3.dp)
                     .height(28.dp)
-                    .background(if (isFocused) Color(0xFF4CAF7D) else Color.Transparent)
+                    .background(if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent)
             )
             Column(Modifier.padding(start = 14.dp)) {
                 Text(
@@ -892,7 +887,7 @@ private fun TvQuickTile(label: String, detail: String, onClick: () -> Unit) {
                 Text(
                     text = detail,
                     fontSize = 11.sp,
-                    color = Color(0xFF94A3B8)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -905,7 +900,7 @@ private fun TvQuickTile(label: String, detail: String, onClick: () -> Unit) {
 @Composable
 private fun TvBottomPromptBar() {
     Surface(
-        color = Color(0xFF0A0D13),
+        color = MaterialTheme.colorScheme.background,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1013,7 +1008,7 @@ private fun TvEmptyPlaylistsView(
             Text(
                 text = "No playlists found. Add an M3U playlist link or Xtream Codes (XC) account to get started.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF94A3B8)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {

@@ -140,11 +140,11 @@ fun SettingsScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
-            // FlowRow, not Row: three chips do not fit on a phone width, and a plain
-            // Row squeezes the last one until its label stacks vertically.
-            FlowRow(
+            // One row of equal thirds. Long labels ("Android TV & Remote") used to
+            // wrap the third chip onto its own line, which read as an accident.
+            Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 FilterChip(
                     selected = uiMode == AppUiMode.AUTO,
@@ -152,7 +152,8 @@ fun SettingsScreen() {
                         Repo.setUiMode(AppUiMode.AUTO)
                         Repo.postStatus("Interface mode: Auto-detect")
                     },
-                    label = { Text("Auto (Widescreen/TV)") }
+                    label = { Text("Auto") },
+                    modifier = Modifier.weight(1f)
                 )
                 FilterChip(
                     selected = uiMode == AppUiMode.TV,
@@ -160,7 +161,8 @@ fun SettingsScreen() {
                         Repo.setUiMode(AppUiMode.TV)
                         Repo.postStatus("Interface mode: Android TV & Remote")
                     },
-                    label = { Text("Android TV & Remote") }
+                    label = { Text("TV & remote") },
+                    modifier = Modifier.weight(1f)
                 )
                 FilterChip(
                     selected = uiMode == AppUiMode.MOBILE,
@@ -168,7 +170,8 @@ fun SettingsScreen() {
                         Repo.setUiMode(AppUiMode.MOBILE)
                         Repo.postStatus("Interface mode: Mobile Touch")
                     },
-                    label = { Text("Mobile Touch") }
+                    label = { Text("Touch") },
+                    modifier = Modifier.weight(1f)
                 )
             }
             Spacer(Modifier.height(10.dp))
@@ -212,12 +215,16 @@ fun SettingsScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 listOf(2 to "2h", 4 to "4h", 6 to "6h").forEach { (hours, label) ->
                     FilterChip(
                         selected = epgWindow == hours,
                         onClick = { Repo.setEpgWindowHours(hours) },
-                        label = { Text("Window: $label") }
+                        label = { Text(label) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }

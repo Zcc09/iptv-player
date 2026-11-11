@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -179,7 +180,20 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
                     FilterChip(
                         selected = favoritesOnly,
                         onClick = { favoritesOnly = !favoritesOnly },
-                        label = { Text("★ Favourites") }
+                        // Heart, not a star: the row toggle below is a heart, and
+                        // one concept gets one icon.
+                        label = { Text("Favourites") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (favoritesOnly) {
+                                    Icons.Default.Favorite
+                                } else {
+                                    Icons.Default.FavoriteBorder
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     )
                 }
                 if (groups.isNotEmpty()) {
@@ -201,9 +215,13 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
             }
 
             Text(
-                text = "${shown.size} of ${all.size} channels" +
-                    (playlist?.lastRefresh?.takeIf { it > 0 }?.let { "  •  updated ${formatTime(it)}" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
+                text = buildString {
+                    // "24 of 24" is noise when nothing is filtered out.
+                    if (shown.size == all.size) append("${all.size} channels")
+                    else append("${shown.size} of ${all.size} channels")
+                    playlist?.lastRefresh?.takeIf { it > 0 }?.let { append("  ·  updated ${formatTime(it)}") }
+                },
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
             )
@@ -232,7 +250,8 @@ fun ChannelsScreen(playlistId: String, initialTab: ChannelsTab = ChannelsTab.LIV
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp)
+                    // clears the system gesture bar, which was clipping the last row
+                    contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
                     items(shown, key = { it.id }) { channel ->
                         val nowPlaying =
