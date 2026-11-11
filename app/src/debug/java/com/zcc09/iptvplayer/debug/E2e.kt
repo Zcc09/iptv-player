@@ -18,6 +18,7 @@ import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.WatchHistory
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
+import com.zcc09.iptvplayer.core.SpeedTest
 import com.zcc09.iptvplayer.core.VodItem
 import com.zcc09.iptvplayer.core.XtreamApi
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +84,7 @@ object E2e : E2eHandler {
             "backup" -> backupProbe()
             "epgsrc" -> scope.launch { epgSourceProbe() }
             "dlna" -> scope.launch { dlnaProbe() }
+            "speed" -> scope.launch { speedProbe() }
             "shot" -> scope.launch {
                 kotlinx.coroutines.delay(2_500)
                 capture(activity, extras["name"] ?: "shot")
@@ -730,6 +732,24 @@ object E2e : E2eHandler {
                 }
                 Logx.i("E2E SHOT name=$name size=${w}x$h")
             }.onFailure { Logx.e("E2E SHOT_FAILED", it) }
+        }
+    }
+
+    /** Speed-test the first playlist and record the line a viewer would see. */
+    private suspend fun speedProbe() {
+        val playlist = Repo.playlists.value.firstOrNull() ?: run {
+            Logx.w("E2E SPEED_NO_PLAYLIST"); return
+        }
+        val target = SpeedTest.targetFor(playlist)
+        runCatching {
+            java.io.File(Repo.filesDir() ?: return, "e2e_result.txt")
+                .writeText("E2E SPEED_START target=" + target.take(70) + System.lineSeparator())
+        }
+        val result = SpeedTest.run(target)
+        val line = SpeedTest.describe(result)
+        Logx.i("E2E SPEED ${playlist.name} :: $line")
+        runCatching {
+            java.io.File(Repo.filesDir() ?: return, "e2e_result.txt").writeText(line)
         }
     }
 

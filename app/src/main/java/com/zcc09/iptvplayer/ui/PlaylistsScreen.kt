@@ -81,8 +81,14 @@ fun PlaylistsScreen() {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { Nav.push(Screen.EditPlaylist(null)) }) {
-                Icon(Icons.Default.Add, contentDescription = "Add playlist")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FloatingActionButton(onClick = { Nav.push(Screen.Settings) }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+                Spacer(Modifier.width(12.dp))
+                FloatingActionButton(onClick = { Nav.push(Screen.EditPlaylist(null)) }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add playlist")
+                }
             }
         }
     ) { padding ->
@@ -101,7 +107,7 @@ fun PlaylistsScreen() {
                         playlist = playlist,
                         channelCount = channels[playlist.id]?.size ?: playlist.channelCount,
                         refreshing = busy.contains(playlist.id),
-                        onOpen = { Nav.push(Screen.Channels(playlist.id)) },
+                        onOpen = { Nav.push(Screen.PlaylistHome(playlist.id)) },
                         onRefresh = { Repo.refreshAsync(playlist.id) },
                         onEdit = { Nav.push(Screen.EditPlaylist(playlist.id)) },
                         onDelete = { pendingDelete = playlist }

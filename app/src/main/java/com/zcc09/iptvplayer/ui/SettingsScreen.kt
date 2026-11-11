@@ -49,6 +49,7 @@ import com.zcc09.iptvplayer.core.PlayUpdate
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.RelayStatus
 import com.zcc09.iptvplayer.core.Repo
+import com.zcc09.iptvplayer.core.SpeedTest
 import com.zcc09.iptvplayer.core.Updater
 import kotlinx.coroutines.launch
 
@@ -66,6 +67,8 @@ fun SettingsScreen() {
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
     var relayStatus by remember { mutableStateOf(RelayManager.status()) }
     var backupNote by remember { mutableStateOf<String?>(null) }
+    var speedBusy by remember { mutableStateOf<String?>(null) }
+    var speedResults by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     // Backup goes through the system file picker: no storage permission, and the
     // user decides where the file lives (Drive, a USB stick, Downloads).
@@ -409,6 +412,59 @@ fun SettingsScreen() {
             }
 
             Spacer(Modifier.height(22.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            // -------------------------------------------------- speed test
+            Text("Server speed test", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Measures the link between this device and the provider: how fast it " +
+                    "answers, and how much a real stream downloads per second.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            if (playlists.isEmpty()) {
+                Text(
+                    "Add a playlist first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            playlists.forEach { pl ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(pl.name, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            speedResults[pl.id] ?: "Not tested yet",
+                            style = MaterialTheme.typography.labelMedium
+                                .copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(
+                        enabled = speedBusy == null,
+                        onClick = {
+                            speedBusy = pl.id
+                            scope.launch {
+                                val result = SpeedTest.run(SpeedTest.targetFor(pl))
+                                speedResults = speedResults + (pl.id to SpeedTest.describe(result))
+                                speedBusy = null
+                            }
+                        }
+                    ) {
+                        Text(if (speedBusy == pl.id) "Testing…" else "Test")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,7 +63,7 @@ import kotlinx.coroutines.delay
  * full-screen session, and it stays muted so a preview is not an ambush.
  */
 @Composable
-fun TvSplitScreen(playlistId: String, tenFoot: Boolean = false) {
+fun TvSplitScreen(playlistId: String, tenFoot: Boolean = false, showBack: Boolean = false) {
     val channels = remember(playlistId) { Repo.channelsOf(playlistId) }
     val playlist = remember(playlistId) { Repo.playlist(playlistId) }
     var selected by remember(playlistId) { mutableStateOf(channels.firstOrNull()) }
@@ -109,12 +111,26 @@ fun TvSplitScreen(playlistId: String, tenFoot: Boolean = false) {
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             item {
-                Text(
-                    text = playlist?.name ?: "Channels",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showBack) {
+                        androidx.compose.material3.IconButton(onClick = { Nav.pop() }) {
+                            androidx.compose.material3.Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Back to modes"
+                            )
+                        }
+                    }
+                    Text(
+                        text = playlist?.name ?: "Channels",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            start = if (showBack) 4.dp else 20.dp,
+                            top = 10.dp,
+                            bottom = 8.dp
+                        )
+                    )
+                }
             }
             items(channels, key = { it.id }) { channel ->
                 SplitChannelRow(

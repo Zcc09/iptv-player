@@ -80,14 +80,7 @@ fun AppRoot() {
     ) {
         when (val screen = Nav.current) {
             is Screen.Home -> {
-                val firstPlaylist = Repo.playlists.collectAsState().value.firstOrNull()
-                // Two panes need a playlist; with none fall through to the
-                // screen that offers to add one.
-                if (usePreviewPane && adaptive.twoPane && firstPlaylist != null) {
-                    // Same layout on an unfolded foldable, a landscape phone and
-                    // a TV; only the scale changes (tenFoot = bigger targets).
-                    TvSplitScreen(firstPlaylist.id, tenFoot = adaptive.tenFoot)
-                } else if (isTvMode && !adaptive.stacked) {
+                if (isTvMode && !adaptive.stacked) {
                     // TV mode forced on a phone-sized window keeps the phone
                     // layout: a 353dp screen cannot carry the ten-foot grid.
                     TvHomeScreen()
@@ -95,8 +88,17 @@ fun AppRoot() {
                     PlaylistsScreen()
                 }
             }
+            is Screen.PlaylistHome -> ModeScreen(screen.playlistId)
             is Screen.EditPlaylist -> PlaylistEditScreen(screen.playlistId)
-            is Screen.Channels -> ChannelsScreen(screen.playlistId, screen.initialTab)
+            is Screen.Channels -> {
+                // Live on a window that can hold both panes is the preview
+                // layout; the back arrow returns to the mode chooser.
+                if (screen.initialTab == ChannelsTab.LIVE && usePreviewPane && adaptive.twoPane) {
+                    TvSplitScreen(screen.playlistId, tenFoot = adaptive.tenFoot, showBack = true)
+                } else {
+                    ChannelsScreen(screen.playlistId, screen.initialTab)
+                }
+            }
             is Screen.Player -> PlayerScreen(screen.channel, screen.urlOverride)
             is Screen.Series -> SeriesScreen(screen.playlistId, screen.seriesId, screen.title)
             is Screen.Recordings -> RecordingsScreen()

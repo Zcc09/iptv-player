@@ -16,6 +16,9 @@ sealed class Screen {
     data class Series(val playlistId: String, val seriesId: Int, val title: String) : Screen()
     /** 10-foot recordings list (TV home tile); phones use the Recordings tab. */
     data object Recordings : Screen()
+    /** After picking a playlist: choose Live / Movies / Shows / Guide. */
+    data class PlaylistHome(val playlistId: String) : Screen()
+
     data object Settings : Screen()
 
     /** Extra XMLTV guides, shared by every playlist. */
