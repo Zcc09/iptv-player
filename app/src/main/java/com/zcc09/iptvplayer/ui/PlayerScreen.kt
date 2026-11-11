@@ -84,7 +84,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.zcc09.iptvplayer.cast.CastCtl
 import com.zcc09.iptvplayer.core.CastMode
-import com.zcc09.iptvplayer.core.CastSession
 import com.zcc09.iptvplayer.core.Channel
 import com.zcc09.iptvplayer.core.EpgParser
 import com.zcc09.iptvplayer.core.EpgStore
@@ -1011,7 +1010,6 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     }
 
     if (showCastDialog) {
-        val castState by CastSession.state.collectAsState()
         val targets = buildList {
             dlnaDevices.forEach { device ->
                 add(
@@ -1038,23 +1036,33 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
         CastSheet(
             targets = targets,
             searching = dlnaBusy,
-            casting = casting || castState.casting,
-            castingTo = when {
-                castState.casting -> castState.device
-                casting -> connectedDevice.ifBlank { "TV" }
-                else -> ""
-            },
-            starting = castState.starting,
-            status = castState.error.ifBlank { dlnaStatus.orEmpty() },
+            casting = casting,
+            castingTo = connectedDevice,
+            starting = false,
+            status = dlnaStatus.orEmpty(),
             onPick = { target ->
                 dlnaStatus = null
                 when (target.kind) {
                     CastTarget.Kind.DLNA -> dlnaDevices.firstOrNull { it.id == target.id }
                         ?.let { device ->
-                            // The TV takes over the picture; the phone must not
-                            // keep playing the same audio behind it.
-                            runCatching { exo.pause() }
-                            CastSession.start(device, channel, Repo.userAgent)
+                            dlnaStatus = "Sending to ${device.name}…"
+                            scope.launch {
+                                // Plain-HTTP MPEG-TS relay: what this class of
+                                // renderer actually fetches. The set may report
+                                // TRANSITIONING while it plays, so the status
+                                // says "sent", not "playing".
+                                val castUrl = runCatching {
+                                    RelayManager.ensureTs(channel, Repo.userAgent)
+                                }.getOrDefault(url)
+                                Dlna.ensureAudible(device)
+                                val ok = Dlna.play(device, castUrl, channel.name)
+                                runCatching { exo.pause() }
+                                dlnaStatus = if (ok) {
+                                    "Sent to ${device.name}"
+                                } else {
+                                    "${device.name} refused the stream"
+                                }
+                            }
                         }
                     CastTarget.Kind.CHROMECAST -> {
                         routes.firstOrNull { it.id == target.id }?.let { CastCtl.connect(it) }
@@ -1063,7 +1071,6 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                 }
             },
             onStopCasting = {
-                CastSession.stop()
                 CastCtl.disconnect()
                 dlnaStatus = null
             },

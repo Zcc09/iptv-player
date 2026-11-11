@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.zcc09.iptvplayer.core.CastSession
 import com.zcc09.iptvplayer.core.DlnaDevice
 
 /** One place the viewer can send the picture, whatever protocol it speaks. */
