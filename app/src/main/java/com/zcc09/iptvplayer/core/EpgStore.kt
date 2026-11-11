@@ -109,10 +109,10 @@ object EpgStore {
         synchronized(lock) { if (!refreshing.add(playlist.id)) return }
         try {
             val cache = withContext(Dispatchers.IO) {
-                val xml = if (playlist.epgUrl.isNotBlank()) {
+                val programs: Map<String, List<EpgProgram>> = if (playlist.epgUrl.isNotBlank()) {
                     // An explicit guide URL wins: it is the only option for an M3U
                     // playlist and lets an Xtream account point at a better feed.
-                    runCatching { Http.getText(playlist.epgUrl, ua = Repo.userAgent) }.getOrNull()
+                    fetchStreamed(playlist.epgUrl)
                 } else {
                     val api = XtreamApi(
                         playlist.url,
@@ -124,16 +124,17 @@ object EpgStore {
                     // XMLTV first: it is the endpoint self-hosted panels actually
                     // serve. `get_full_epg` remains as the fallback for XC panels
                     // that implement it and not /xmltv.php.
-                    val xmltvXml = runCatching { api.xmltv() }.getOrNull()
-                    if (!xmltvXml.isNullOrBlank() && xmltvXml.contains("<programme")) {
-                        xmltvXml
+                    val fromXmltv = fetchStreamed(api.xmltvUrl())
+                    if (fromXmltv.isNotEmpty()) {
+                        fromXmltv
                     } else {
                         runCatching {
-                            api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
-                        }.getOrNull()
+                            EpgParser.parse(
+                                api.fullEpg(today.format(dateFmt), today.plusDays(1).format(dateFmt))
+                            )
+                        }.getOrNull() ?: emptyMap()
                     }
                 }
-                val programs = xml?.let { runCatching { EpgParser.parse(it) }.getOrNull() } ?: emptyMap()
                 // Guides the viewer added app-wide fill channels the provider
                 // left without a schedule; the provider's own data wins.
                 val merged = EpgMerge.merge(programs, EpgSources.cachedMerged())
@@ -178,8 +179,14 @@ object EpgStore {
         }
     }
 
+    /** Fetch a guide as a stream and keep only the window the screen can show. */
+    private fun fetchStreamed(url: String): Map<String, List<EpgProgram>> = runCatching {
+        Http.openTextStream(url, timeoutMs = 45_000, ua = Repo.userAgent).use { stream ->
+            EpgParser.prune(EpgParser.parseStream(stream))
+        }
+    }.onFailure { Logx.w("EPG_STREAM_FAILED ${it.message}") }.getOrNull() ?: emptyMap()
+
     private fun cacheFile(playlistId: String): File? {
-        val context = appContext ?: return null
         return File(File(Repo.cacheDir, "epg"), "$playlistId.json")
     }
 }

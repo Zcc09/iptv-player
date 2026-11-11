@@ -145,8 +145,10 @@ object EpgSources {
     suspend fun test(source: EpgSource): EpgSource {
         val started = System.currentTimeMillis()
         val result = runCatching {
-            val xml = Http.getText(source.url, timeoutMs = 45_000, ua = Repo.userAgent)
-            EpgParser.parse(xml)
+            // Streamed, never a whole String: public guides inflate to 50 MB+.
+            Http.openTextStream(source.url, timeoutMs = 45_000, ua = Repo.userAgent).use { stream ->
+                EpgParser.prune(EpgParser.parseStream(stream))
+            }
         }
         val updated = result.fold(
             onSuccess = { programs ->
@@ -169,7 +171,7 @@ object EpgSources {
                 source.copy(
                     lastFetchAt = started,
                     lastOk = false,
-                    lastError = t.message?.take(120) ?: "Failed to fetch the guide"
+                    lastError = friendlyError(t)
                 )
             }
         )
@@ -205,6 +207,17 @@ object EpgSources {
     }
 
     fun channelIdHint(url: String): String = hostOf(url)
+
+    /**
+     * A raw exception message ("Failed to allocate a 191135752 byte allocation")
+     * tells a viewer nothing, so the row gets a sentence they can act on.
+     */
+    private fun friendlyError(t: Throwable): String = when (t) {
+        is OutOfMemoryError -> "This guide is too large for this device's memory"
+        is java.io.IOException -> "Could not download that guide — check the link"
+        is java.util.zip.ZipException -> "That file is not a readable gzip archive"
+        else -> t.message?.take(90) ?: "Could not read that guide"
+    }
 
     private fun hostOf(url: String): String =
         runCatching { java.net.URI(url).host ?: "Guide" }.getOrNull() ?: "Guide"

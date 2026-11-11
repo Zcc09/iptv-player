@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -111,7 +112,7 @@ fun EpgSourcesScreen() {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -122,8 +123,13 @@ fun EpgSourcesScreen() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    TextButton(onClick = { addAndTest(preset.name, preset.url) }) { Text("Add") }
+                    Spacer(Modifier.width(12.dp))
+                    OutlinedButton(
+                        onClick = { addAndTest(preset.name, preset.url) },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    ) { Text("Add") }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             }
 
             item {
@@ -149,7 +155,8 @@ fun EpgSourcesScreen() {
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = { addAndTest(name, url) },
-                    enabled = url.isNotBlank()
+                    enabled = url.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -217,10 +224,14 @@ private fun EpgSourceRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        // Top-aligned: an error line wraps to two lines, and centring everything
+        // against that pushed the status dot and controls off the title.
+        verticalAlignment = Alignment.Top
     ) {
         // Signature detail: the dot is only green when a fetch really worked.
-        StatusDot(ok = source.lastOk, enabled = source.enabled)
+        Box(Modifier.padding(top = 6.dp)) {
+            StatusDot(ok = source.lastOk, enabled = source.enabled)
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
@@ -242,30 +253,33 @@ private fun EpgSourceRow(
                 maxLines = 2
             )
         }
-        if (busy) {
-            CircularProgressIndicator(
-                strokeWidth = 2.dp,
-                modifier = Modifier
-                    .size(18.dp)
-                    .padding(end = 0.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-        } else {
-            IconButton(onClick = onRetest) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 2.dp)
+        ) {
+            if (busy) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+            } else {
+                IconButton(onClick = onRetest) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Check this guide again",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Switch(checked = source.enabled, onCheckedChange = onToggle)
+            IconButton(onClick = onRemove) {
                 Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "Check this guide again",
+                    Icons.Default.Delete,
+                    contentDescription = "Remove this guide",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-        Switch(checked = source.enabled, onCheckedChange = onToggle)
-        IconButton(onClick = onRemove) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Remove this guide",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

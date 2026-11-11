@@ -95,6 +95,28 @@ object Http {
         return conn to conn.inputStream
     }
 
+    /**
+     * GET a text body as a stream, inflating gzip when the server says so or the
+     * body starts with the gzip magic. Guides are tens of megabytes, so callers
+     * stream this rather than materialising a String.
+     */
+    fun openTextStream(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        timeoutMs: Int = 30000,
+        ua: String = DEFAULT_UA
+    ): InputStream {
+        val (conn, input) = openStream(url, headers, timeoutMs, timeoutMs, ua)
+        val buffered = java.io.BufferedInputStream(input, 64 * 1024)
+        buffered.mark(2)
+        val magic = ByteArray(2)
+        val n = buffered.read(magic)
+        buffered.reset()
+        val gz = conn.contentEncoding?.contains("gzip") == true ||
+            (n == 2 && magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte())
+        return if (gz) java.util.zip.GZIPInputStream(buffered, 64 * 1024) else buffered
+    }
+
     /** GET a binary body with a safety cap (HLS segments, images). */
     fun getBytes(
         url: String,

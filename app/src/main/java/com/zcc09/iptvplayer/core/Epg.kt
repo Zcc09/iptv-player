@@ -51,6 +51,82 @@ object EpgParser {
     }
 
     /**
+     * Parse an XMLTV document straight off a stream.
+     *
+     * Public guides inflate to 50 MB and more, which a whole-string parse turns
+     * into a single ~190 MB allocation - enough to fail on a TV box, and it did
+     * fail on the E2E emulator ("Failed to allocate a 191135752 byte
+     * allocation"). Elements are consumed one at a time, so only the programme
+     * currently being read is buffered.
+     */
+    fun parseStream(input: java.io.InputStream): Map<String, List<EpgProgram>> {
+        val byChannel = LinkedHashMap<String, MutableList<EpgProgram>>()
+        val reader = java.io.BufferedReader(java.io.InputStreamReader(input, Charsets.UTF_8), 64 * 1024)
+        var pending = StringBuilder(4096)
+        reader.useLines { lines ->
+            for (line in lines) {
+                // Most files are one programme per line: skip the rest cheaply.
+                if (pending.isEmpty() && !line.contains("<programme")) continue
+                pending.append(line).append('\n')
+                while (true) {
+                    val close = pending.indexOf("</programme>")
+                    if (close < 0) break
+                    val end = close + "</programme>".length
+                    val open = pending.lastIndexOf("<programme", close)
+                    if (open >= 0) {
+                        parseXmltvElement(pending.substring(open, end))?.let { (channel, program) ->
+                            byChannel.getOrPut(channel) { mutableListOf() }.add(program)
+                        }
+                    }
+                    pending.delete(0, end)
+                }
+                // A malformed file must not grow this buffer without bound.
+                if (pending.length > 2 * 1024 * 1024) pending = StringBuilder(4096)
+            }
+        }
+        for (programs in byChannel.values) programs.sortBy { it.startEpochSec }
+        return byChannel
+    }
+
+    /** One `<programme …>…</programme>` element, as the streaming reader sees it. */
+    private fun parseXmltvElement(element: String): Pair<String, EpgProgram>? {
+        val match = XMLTV_PROGRAMME.find(element) ?: return null
+        val attrs = match.groupValues[1]
+        val body = match.groupValues[2]
+        val channel = attr(attrs, "channel") ?: return null
+        val start = xmltvTime(attr(attrs, "start")) ?: return null
+        val stop = xmltvTime(attr(attrs, "stop")) ?: return null
+        if (stop <= start) return null
+        return channel to EpgProgram(
+            title = find(TITLE, body) ?: "",
+            description = find(DESCRIPTION, body) ?: "",
+            iconUrl = find(ICON_SRC, body) ?: "",
+            startEpochSec = start,
+            endEpochSec = stop
+        )
+    }
+
+    /**
+     * Keep only what a guide screen can use: programmes that ended in the last
+     * two hours through the next seven days. Public feeds carry far more, and
+     * every held programme costs memory on a device with little of it.
+     */
+    fun prune(
+        programs: Map<String, List<EpgProgram>>,
+        nowSec: Long = System.currentTimeMillis() / 1000
+    ): Map<String, List<EpgProgram>> {
+        if (programs.isEmpty()) return programs
+        val from = nowSec - 2 * 60 * 60
+        val to = nowSec + 7 * 24 * 60 * 60
+        val out = LinkedHashMap<String, List<EpgProgram>>(programs.size)
+        for ((channel, list) in programs) {
+            val kept = list.filter { it.endEpochSec > from && it.startEpochSec < to }
+            if (kept.isNotEmpty()) out[channel] = kept
+        }
+        return out
+    }
+
+    /**
      * Standard XMLTV: `<programme start="YYYYMMDDHHMMSS ±HHMM" stop="…" channel="id">`.
      * Keyed by the `channel` attribute, which for Xtream-era panels is the
      * `epg_channel_id` the stream list advertises. A missing offset means UTC
