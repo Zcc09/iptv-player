@@ -715,6 +715,10 @@ object E2e : E2eHandler {
         }
         try {
             note("E2E DLNA_START")
+            note("E2E DLNA_DIAG lanIp=${runCatching { com.zcc09.iptvplayer.core.Net.lanIp() }.getOrNull()}")
+            // Direct description fetch: separates "SSDP blocked" from "HTTP blocked".
+            val direct = runCatching { Dlna.describe("http://192.168.0.130:1126/") }.getOrNull()
+            note("E2E DLNA_DIAG direct=${direct?.name ?: "none"} ctl=${direct?.controlUrl?.take(60) ?: "-"}")
             val devices = Dlna.discover(timeoutMs = 6000)
             note("E2E DLNA_DEVICES count=${devices.size}")
             devices.forEach { d ->
@@ -725,8 +729,13 @@ object E2e : E2eHandler {
                 note("E2E DLNA_NO_CHANNEL"); return
             }
             val target = devices.first()
-            val ok = Dlna.play(target, channel.url, channel.name)
-            note("E2E DLNA_CAST device=${target.name} ok=$ok url=${channel.url.take(60)}")
+            // Same path the cast dialog takes: republish the channel as plain
+            // TS on the LAN, because LG/Samsung DMRs refuse HTTPS and HLS.
+            val castUrl = runCatching { RelayManager.ensureTs(channel, Repo.userAgent) }
+                .getOrDefault(channel.url)
+            note("E2E DLNA_RELAY url=${castUrl.take(70)}")
+            val ok = Dlna.play(target, castUrl, channel.name)
+            note("E2E DLNA_CAST device=${target.name} ok=$ok url=${castUrl.take(60)}")
         } catch (t: Throwable) {
             Logx.e("E2E DLNA_FAILED", t)
             note("E2E DLNA_FAILED ${t.message}")
