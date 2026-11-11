@@ -93,11 +93,14 @@ import com.zcc09.iptvplayer.core.Recorder
 import com.zcc09.iptvplayer.core.RelayManager
 import com.zcc09.iptvplayer.core.Repo
 import com.zcc09.iptvplayer.core.UrlTools
+import com.zcc09.iptvplayer.core.Dlna
+import com.zcc09.iptvplayer.core.DlnaDevice
 import com.zcc09.iptvplayer.core.WatchHistory
 import com.zcc09.iptvplayer.core.Zap
 import com.zcc09.iptvplayer.player.Playback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** How many audio / subtitle groups the current stream advertises (for the E2E line). */
@@ -136,6 +139,10 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     val connectedDevice by CastCtl.device.collectAsState()
 
     var showCastDialog by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var dlnaDevices by remember { mutableStateOf<List<DlnaDevice>>(emptyList()) }
+    var dlnaBusy by remember { mutableStateOf(false) }
+    var dlnaStatus by remember { mutableStateOf<String?>(null) }
     var showTrackDialog by remember { mutableStateOf(false) }
     var trackSnapshot by remember { mutableStateOf<Tracks?>(null) }
     // Sleep timer: cycles Off -> 15 -> 30 -> 60 minutes, then pauses playback.
@@ -148,7 +155,6 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     var showZapBanner by remember { mutableStateOf(false) }
     var showChannelDrawer by remember { mutableStateOf(false) }
     var videoSizeText by remember { mutableStateOf<String?>(null) }
-    val showNavHints by Repo.showNavHints.collectAsState()
     val focusRequester = remember { FocusRequester() }
 
     // EPG: "now / next" line for live channels. The store refetches when
@@ -350,7 +356,14 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
     }
 
     LaunchedEffect(showCastDialog) {
-        if (showCastDialog) CastCtl.startDiscovery(context)
+        if (showCastDialog) {
+            CastCtl.startDiscovery(context)
+            // Network TVs (LG webOS, Samsung, Sony, Philips…) speak DLNA, not
+            // Chromecast, so they are discovered separately and in parallel.
+            dlnaBusy = true
+            dlnaDevices = runCatching { Dlna.discover() }.getOrDefault(emptyList())
+            dlnaBusy = false
+        }
     }
 
     fun move(offset: Int) {
@@ -930,20 +943,6 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                     }
 
                     Spacer(Modifier.height(6.dp))
-                    if (showNavHints) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            RemoteButtonHint(buttonLabel = "▲/▼", actionName = "Zap Channel")
-                            Spacer(Modifier.width(10.dp))
-                            RemoteButtonHint(buttonLabel = "◄/►", actionName = "Mini Guide")
-                            Spacer(Modifier.width(10.dp))
-                            RemoteButtonHint(buttonLabel = "[A]/OK", actionName = "Toggle OSD")
-                            Spacer(Modifier.width(10.dp))
-                            RemoteButtonHint(buttonLabel = "[B]/Back", actionName = "Close/Exit")
-                        }
-                    }
                 }
             }
         }
@@ -1064,6 +1063,71 @@ fun PlayerScreen(channel: Channel, urlOverride: String?) {
                                 }
                             }
                         }
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            "Network TVs",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "LG webOS, Samsung, Sony and Philips sets speak DLNA rather than " +
+                                "Chromecast. They must be on this Wi-Fi with their network/" +
+                                "media setting on.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        when {
+                            dlnaBusy -> Text(
+                                "Searching for network TVs…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            dlnaDevices.isEmpty() -> Text(
+                                "None found — you can retry by reopening this dialog.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            else -> dlnaDevices.forEach { device ->
+                                TextButton(
+                                    onClick = {
+                                        dlnaStatus = "Sending to ${device.name}…"
+                                        scope.launch {
+                                            val ok = Dlna.play(device, url, channel.name)
+                                            dlnaStatus = if (ok) {
+                                                "Playing on ${device.name}"
+                                            } else {
+                                                "${device.name} refused the stream"
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text(device.name, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            listOfNotNull(
+                                                device.model.takeIf { it.isNotBlank() },
+                                                "DLNA"
+                                            ).joinToString("  ·  "),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        dlnaStatus?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
                         Spacer(Modifier.height(10.dp))
                         Text(
                             when (Repo.castMode.value) {

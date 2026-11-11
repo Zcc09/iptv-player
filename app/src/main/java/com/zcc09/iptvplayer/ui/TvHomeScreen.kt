@@ -97,8 +97,6 @@ fun TvHomeScreen() {
     val channelsMap by Repo.channels.collectAsState()
     val favorites by Repo.favorites.collectAsState()
     val busy by Repo.busy.collectAsState()
-    val tvSetupDismissed by Repo.tvSetupDismissed.collectAsState()
-    val showNavHints by Repo.showNavHints.collectAsState()
 
     val context = LocalContext.current
     // Badge for the Recordings tile on the home screen.
@@ -107,7 +105,6 @@ fun TvHomeScreen() {
         recordingsCount = withContext(Dispatchers.IO) { Recorder.list(context).size }
     }
 
-    var showTvSetupDialog by remember { mutableStateOf(!tvSetupDismissed) }
 
     // Active playlist selection
     var selectedPlaylistIndex by remember { mutableStateOf(0) }
@@ -167,7 +164,7 @@ fun TvHomeScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0E14))
+            .background(Color(0xFF0B0C0E))
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
@@ -238,7 +235,7 @@ fun TvHomeScreen() {
                         modifier = Modifier
                             .width(260.dp)
                             .fillMaxHeight()
-                            .background(Color(0xFF0F141E))
+                            .background(Color(0xFF111316))
                     )
 
                     // Vertical divider
@@ -264,7 +261,6 @@ fun TvHomeScreen() {
                             TvChannelSpotlight(
                                 channel = channel,
                                 isFavorite = favorites.contains(channel.id),
-                                showNavHints = showNavHints,
                                 onPlay = { Nav.push(Screen.Player(channel)) },
                                 onToggleFavorite = {
                                     Repo.toggleFavorite(channel.id)
@@ -331,8 +327,8 @@ fun TvHomeScreen() {
                                 },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color(0xFF192131),
-                                    unfocusedContainerColor = Color(0xFF131924),
+                                    focusedContainerColor = Color(0xFF1F2329),
+                                    unfocusedContainerColor = Color(0xFF171A1E),
                                     focusedBorderColor = TvFocusedBorderColor,
                                     unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
                                     focusedTextColor = Color.White,
@@ -391,24 +387,6 @@ fun TvHomeScreen() {
             }
 
             // ------------------------------------------------------------- BOTTOM PROMPT BAR
-            if (showNavHints) {
-                TvBottomPromptBar()
-            }
-        }
-
-        // ---------------------------------------------------------------- FIRST-TIME SETUP DIALOG
-        if (showTvSetupDialog) {
-            TvWelcomeSetupDialog(
-                onDismiss = {
-                    showTvSetupDialog = false
-                    Repo.setTvSetupDismissed(true)
-                },
-                onSwitchToMobile = {
-                    showTvSetupDialog = false
-                    Repo.setTvSetupDismissed(true)
-                    Repo.setUiMode(AppUiMode.MOBILE)
-                }
-            )
         }
     }
 }
@@ -441,7 +419,7 @@ private fun TvTopBar(
                 color = Color.White
             )
             Spacer(Modifier.width(8.dp))
-            TvBadge(text = "TV EDITION", color = Color(0xFF38BDF8))
+            TvBadge(text = "TV EDITION", color = Color(0xFF46B37C))
         }
 
         Spacer(Modifier.width(20.dp))
@@ -450,7 +428,7 @@ private fun TvTopBar(
         if (activePlaylist != null) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF161D2B)
+                color = Color(0xFF171A1E)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -460,7 +438,7 @@ private fun TvTopBar(
                         text = activePlaylist.name,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
-                        color = Color(0xFFE2E8F0)
+                        color = Color(0xFFE9EBEE)
                     )
                     Text(
                         text = " • $channelCount channels",
@@ -518,7 +496,7 @@ private fun TvTopActionPill(label: String, onClick: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = if (isFocused) TvFocusedBorderColor else Color(0xFF1E2838),
+        color = if (isFocused) TvFocusedBorderColor else Color(0xFF1F2329),
         border = if (isFocused) BorderStroke(2.dp, Color.White) else null,
         modifier = Modifier
             .onFocusChanged { isFocused = it.isFocused }
@@ -563,7 +541,7 @@ private fun TvSidebar(
                     text = "PLAYLISTS",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF64748B),
+                    color = Color(0xFF6C757F),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
@@ -588,7 +566,7 @@ private fun TvSidebar(
                 text = "NAVIGATION",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF64748B),
+                color = Color(0xFF6C757F),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
@@ -635,7 +613,7 @@ private fun TvSidebar(
                     text = "CATEGORIES",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF64748B),
+                    color = Color(0xFF6C757F),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
@@ -661,14 +639,13 @@ private fun TvSidebar(
 private fun TvChannelSpotlight(
     channel: Channel,
     isFavorite: Boolean,
-    showNavHints: Boolean,
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131B29)),
-        border = BorderStroke(1.dp, Color(0xFF26334D)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF171A1E)),
+        border = BorderStroke(1.dp, Color(0xFF2A2F36)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
@@ -676,7 +653,7 @@ private fun TvChannelSpotlight(
                 .fillMaxWidth()
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF172033), Color(0xFF0F1522))
+                        colors = listOf(Color(0xFF171A1E), Color(0xFF171A1E))
                     )
                 )
                 .padding(18.dp)
@@ -687,7 +664,7 @@ private fun TvChannelSpotlight(
                     contentDescription = channel.name,
                     size = 68.dp,
                     modifier = Modifier
-                        .background(Color(0xFF1C2638), RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1F2329), RoundedCornerShape(10.dp))
                         .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
                 )
 
@@ -732,20 +709,6 @@ private fun TvChannelSpotlight(
                     }
 
                     Spacer(Modifier.height(8.dp))
-
-                    if (showNavHints) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RemoteButtonHint(buttonLabel = "OK / A", actionName = "Play Fullscreen")
-                            Spacer(Modifier.width(12.dp))
-                            RemoteButtonHint(
-                                buttonLabel = "Y",
-                                actionName = if (isFavorite) "Remove Favourite" else "Add Favourite",
-                                buttonColor = MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            RemoteButtonHint(buttonLabel = "X", actionName = "Search", buttonColor = MaterialTheme.colorScheme.outline)
-                        }
-                    }
                 }
 
                 Spacer(Modifier.width(16.dp))
@@ -894,91 +857,6 @@ private fun TvQuickTile(label: String, detail: String, onClick: () -> Unit) {
     }
 }
 
-/**
- * Bottom bar showing controller & remote button shortcuts.
- */
-@Composable
-private fun TvBottomPromptBar() {
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 16.dp)
-        ) {
-            RemoteButtonHint(buttonLabel = "D-PAD", actionName = "Navigate")
-            Spacer(Modifier.width(16.dp))
-            RemoteButtonHint(buttonLabel = "OK / (A)", actionName = "Play Channel")
-            Spacer(Modifier.width(16.dp))
-            RemoteButtonHint(buttonLabel = "(Y)", actionName = "Toggle Favourite")
-            Spacer(Modifier.width(16.dp))
-            RemoteButtonHint(buttonLabel = "(X)", actionName = "Quick Search")
-            Spacer(Modifier.width(16.dp))
-            RemoteButtonHint(buttonLabel = "(B) / Back", actionName = "Return")
-        }
-    }
-}
-
-/**
- * First-Time Setup / TV Welcome Guide modal dialog.
- */
-@Composable
-private fun TvWelcomeSetupDialog(
-    onDismiss: () -> Unit,
-    onSwitchToMobile: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🎮 Android TV & Remote Mode")
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Widescreen display or remote/gamepad input detected! The 10-foot TV interface is now active.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                Text(
-                    "Controls Reference:",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                RemoteButtonHint(buttonLabel = "D-Pad / Left Stick", actionName = "Browse categories and channels smoothly")
-                RemoteButtonHint(buttonLabel = "OK / (A) Button", actionName = "Select category or Play channel fullscreen")
-                RemoteButtonHint(buttonLabel = "(Y) / Yellow Button", actionName = "Quick toggle channel in Favourites")
-                RemoteButtonHint(buttonLabel = "(X) / Search Button", actionName = "Search channels by name or group")
-                RemoteButtonHint(buttonLabel = "(B) / Back Button", actionName = "Return to categories or previous screen")
-                RemoteButtonHint(buttonLabel = "Channel Up / Down", actionName = "Instant channel zapping while in video player")
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "You can switch back to Mobile touch mode anytime from the top bar or Settings.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = TvFocusedBorderColor)
-            ) {
-                Text("Start Watching", fontWeight = FontWeight.Bold, color = Color.Black)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onSwitchToMobile) {
-                Text("Use Mobile Touch UI")
-            }
-        }
-    )
-}
 
 /**
  * TV-friendly empty state when no playlists have been added yet.

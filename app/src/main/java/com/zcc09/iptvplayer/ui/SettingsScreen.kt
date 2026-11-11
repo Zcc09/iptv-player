@@ -59,9 +59,9 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val castMode by Repo.castMode.collectAsState()
     val uiMode by Repo.uiMode.collectAsState()
+    val usePreviewPane by Repo.previewPane.collectAsState()
     val epgWindow by Repo.epgWindowHours.collectAsState()
     val epgNowPlaying by Repo.epgNowPlaying.collectAsState()
-    val showNavHints by Repo.showNavHints.collectAsState()
     val playlists by Repo.playlists.collectAsState()
     var userAgent by remember { mutableStateOf(Repo.userAgent) }
     var relayStatus by remember { mutableStateOf(RelayManager.status()) }
@@ -175,6 +175,7 @@ fun SettingsScreen() {
                 )
             }
             Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(10.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -182,24 +183,18 @@ fun SettingsScreen() {
                     .padding(vertical = 4.dp)
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Controller & Remote Navigation Hints", style = MaterialTheme.typography.bodyMedium)
+                    Text("Preview beside the list", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Show button shortcut prompts at the bottom of the TV screen and in the video player OSD.",
+                        "On a TV or wide screen, show the playing channel to the right of " +
+                            "the channel list, with its guide and stream details underneath.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
-                    checked = showNavHints,
-                    onCheckedChange = { Repo.setShowNavHints(it) }
+                    checked = usePreviewPane,
+                    onCheckedChange = { Repo.setPreviewPane(it) }
                 )
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = {
-                Repo.setTvSetupDismissed(false)
-                Repo.postStatus("TV & Gamepad guide will show on next TV launch")
-            }) {
-                Text("Show TV & Gamepad Guide on next launch")
             }
 
             Spacer(Modifier.height(18.dp))

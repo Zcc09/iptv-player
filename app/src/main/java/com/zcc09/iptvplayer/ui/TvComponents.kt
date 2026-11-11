@@ -38,9 +38,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val TvFocusedBorderColor = Color(0xFF38BDF8) // Bright electric cyan focus ring
-val TvCardBackground = Color(0xFF141923)
-val TvCardFocusedBackground = Color(0xFF1F2839)
+val TvFocusedBorderColor = Color(0xFF46B37C) // same signal green as the phone UI
+val TvCardBackground = Color(0xFF171A1E)
+val TvCardFocusedBackground = Color(0xFF1F2329)
 
 /**
  * 10-foot TV card that scales up and illuminates when focused via D-pad or Gamepad.
@@ -124,7 +124,7 @@ fun TvNavButton(
         shape = RoundedCornerShape(10.dp),
         color = when {
             isFocused -> TvFocusedBorderColor
-            selected -> Color(0xFF232D42)
+            selected -> Color(0xFF1F2329)
             else -> Color.Transparent
         },
         border = if (isFocused) {
@@ -176,7 +176,7 @@ fun TvNavButton(
                         text = badgeText,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isFocused) Color.Black else Color(0xFF94A3B8),
+                        color = if (isFocused) Color.Black else Color(0xFF9AA3AD),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -193,8 +193,8 @@ fun RemoteButtonHint(
     buttonLabel: String,
     actionName: String,
     modifier: Modifier = Modifier,
-    buttonColor: Color = Color(0xFF334155),
-    textColor: Color = Color(0xFFE2E8F0)
+    buttonColor: Color = Color(0xFF2A2F36),
+    textColor: Color = Color(0xFFE9EBEE)
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -228,7 +228,7 @@ fun RemoteButtonHint(
 fun TvBadge(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = Color(0xFF0284C7)
+    color: Color = Color(0xFF46B37C)
 ) {
     Surface(
         shape = RoundedCornerShape(4.dp),

@@ -44,6 +44,7 @@ fun AppRoot() {
     val playRequest by Repo.playRequest.collectAsState()
     val status by Repo.status.collectAsState()
     val uiModePref by Repo.uiMode.collectAsState()
+    val usePreviewPane by Repo.previewPane.collectAsState()
     val gamepadActive by TvDetector.gamepadDetected.collectAsState()
 
     val context = LocalContext.current
@@ -78,7 +79,14 @@ fun AppRoot() {
         when (val screen = Nav.current) {
             is Screen.Home -> {
                 if (isTvMode) {
-                    TvHomeScreen()
+                    // The split layout needs a playlist to show; with none,
+                    // fall back to the TV home, which offers to add one.
+                    val firstPlaylist = Repo.playlists.collectAsState().value.firstOrNull()
+                    if (usePreviewPane && firstPlaylist != null) {
+                        TvSplitScreen(firstPlaylist.id)
+                    } else {
+                        TvHomeScreen()
+                    }
                 } else {
                     PlaylistsScreen()
                 }

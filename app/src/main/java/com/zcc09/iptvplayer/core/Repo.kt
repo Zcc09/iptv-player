@@ -33,6 +33,7 @@ object Repo {
     private const val KEY_UI_MODE = "ui_mode"
     private const val KEY_TV_SETUP_DISMISSED = "tv_setup_dismissed"
     private const val KEY_NAV_HINTS = "show_nav_hints"
+    private const val KEY_PREVIEW_PANE = "tv_preview_pane"
     private const val KEY_KEEP_RECORDING = "keep_recording_on_channel_switch"
     private const val KEY_EPG_WINDOW_HOURS = "epg_window_hours"
     private const val KEY_EPG_NOW_PLAYING = "epg_now_playing"
@@ -70,6 +71,10 @@ object Repo {
     private val _showNavHints = MutableStateFlow(true)
     val showNavHints: StateFlow<Boolean> = _showNavHints.asStateFlow()
 
+    /** TV/wide layout: channel list beside a live preview instead of the grid. */
+    private val _previewPane = MutableStateFlow(true)
+    val previewPane: StateFlow<Boolean> = _previewPane.asStateFlow()
+
     private val _keepRecording = MutableStateFlow(false)
     val keepRecording: StateFlow<Boolean> = _keepRecording.asStateFlow()
 
@@ -104,6 +109,7 @@ object Repo {
         }.getOrDefault(AppUiMode.AUTO)
         _tvSetupDismissed.value = p.getBoolean(KEY_TV_SETUP_DISMISSED, false)
         _showNavHints.value = p.getBoolean(KEY_NAV_HINTS, true)
+        _previewPane.value = p.getBoolean(KEY_PREVIEW_PANE, true)
         _keepRecording.value = p.getBoolean(KEY_KEEP_RECORDING, false)
         val window = p.getInt(KEY_EPG_WINDOW_HOURS, 4)
         _epgWindowHours.value = if (window in setOf(2, 4, 6)) window else 4
@@ -213,6 +219,11 @@ object Repo {
     fun setShowNavHints(show: Boolean) {
         _showNavHints.value = show
         prefs?.edit()?.putBoolean(KEY_NAV_HINTS, show)?.apply()
+    }
+
+    fun setPreviewPane(on: Boolean) {
+        _previewPane.value = on
+        prefs?.edit()?.putBoolean(KEY_PREVIEW_PANE, on)?.apply()
     }
 
     fun setKeepRecording(keep: Boolean) {
